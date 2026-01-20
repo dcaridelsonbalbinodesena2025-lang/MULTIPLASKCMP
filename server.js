@@ -2,7 +2,6 @@ const WebSocket = require('ws');
 const fetch = require('node-fetch');
 const express = require('express');
 const cors = require('cors');
-const cron = require('node-cron');
 
 const app = express();
 app.use(express.json());
@@ -21,7 +20,6 @@ const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_";
 let fin = { bancaInicial: 5000, bancaAtual: 5000, payout: 0.95, perdaTotal: 0 };
 let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0, totalG1: 0, totalG2: 0 };
 
-// Ranking Individual por Estratégia (Separadas como você pediu)
 let rankingEstrategias = {
     "REGRA 1": { d: 0, g1: 0, g2: 0, l: 0, t: 0 },
     "FLUXO SNIPER": { d: 0, g1: 0, g2: 0, l: 0, t: 0 },
@@ -104,7 +102,6 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             m.fechamentoAnt = m.velaAb;
             m.velaAb = p;
 
-            // 1. REGRA 1 (ALERTA S00)
             if (!m.op.ativa && podeOp && (m.forca >= 82 || m.forca <= 18)) {
                 m.sinalPendenteR1 = m.forca >= 82 ? "CALL" : "PUT";
                 m.buscandoTaxaR1 = true;
@@ -112,7 +109,6 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             }
         }
 
-        // TAXA REGRA 1
         if (m.buscandoTaxaR1 && !m.op.ativa && podeOp) {
             let diffV = Math.abs(m.fechamentoAnt - m.velaAb) || 0.0001;
             let confirmou = (m.sinalPendenteR1 === "CALL" && p <= (m.velaAb - (diffV * 0.2))) || 
@@ -123,31 +119,24 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             }
         }
 
-        // --- GATILHOS DE 30 SEGUNDOS (SEPARADOS) ---
         if (s === 30 && !m.op.ativa && podeOp && !m.buscandoTaxaR1) {
             let ult3 = m.histCores.slice(-3);
-            
-            // 2. FLUXO SNIPER (Lógica de Cor)
             if (ult3.length === 3 && ult3.every(c => c === "V")) {
                 disparar(m, "FLUXO SNIPER", "CALL", fin.bancaAtual * 0.01, p, 30);
             } else if (ult3.length === 3 && ult3.every(c => c === "R")) {
                 disparar(m, "FLUXO SNIPER", "PUT", fin.bancaAtual * 0.01, p, 30);
-            } 
-            // 3. ZIGZAG FRACTAL (Lógica de Força/Exaustão)
-            else if (m.forca > 80) {
+            } else if (m.forca > 80) {
                 disparar(m, "ZIGZAG FRACTAL", "PUT", fin.bancaAtual * 0.01, p, 30);
             } else if (m.forca < 20) {
                 disparar(m, "ZIGZAG FRACTAL", "CALL", fin.bancaAtual * 0.01, p, 30);
             }
         }
 
-        // 4. SNIPER RETRAÇÃO (S45)
         if (s === 45 && !m.op.ativa && podeOp) {
             let diffP = (p - m.velaAb) / m.velaAb * 1000;
             if (Math.abs(diffP) > 0.8) disparar(m, "SNIPER (RETRAÇÃO)", diffP > 0 ? "PUT" : "CALL", fin.bancaAtual * 0.01, p, 15);
         }
 
-        // LÓGICA DE RESULTADOS
         if (m.op.ativa) {
             m.op.t--;
             if (m.op.t <= 0) {
@@ -188,7 +177,7 @@ function disparar(m, est, dir, val, pre, t) {
     msgEntrada(m, est, dir, new Date(Date.now() + t * 1000));
 }
 
-// --- RELATÓRIO PDF COMPLETO ---
+// --- RELATÓRIO PDF ---
 setInterval(() => {
     let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
     let efSemGale = stats.totalAnalises > 0 ? ((stats.winDireto / stats.totalAnalises) * 100).toFixed(1) : 0;
@@ -199,28 +188,34 @@ setInterval(() => {
     let piorAtivo = rAtivos.length > 1 ? rAtivos[rAtivos.length-1][0] : "---";
 
     let msg = `📄 *RELATÓRIO DE PERFORMANCE*\n⏰ ${getBrasiliaTime()}\n\n`;
-    msg += `📊 *ESTATÍSTICAS GERAIS*\n• Analises: ${stats.totalAnalises}\n• Win Direto: ${stats.winDireto}\n• Win com Gale: ${stats.winG1 + stats.winG2}\n• Red (Loss): ${stats.loss}\n`;
-    msg += `• Green G1: ${stats.winG1} | Green G2: ${stats.winG2}\n• Total G1: ${stats.totalG1} | Total G2: ${stats.totalG2}\n\n`;
-    
-    msg += `🏆 *RANKING ESTRATÉGIAS*\n`;
-    for (let e in rankingEstrategias) {
-        let r = rankingEstrategias[e];
-        msg += `• ${e}: ${r.d+r.g1+r.g2}W | ${r.l}L\n`;
-    }
-    
-    msg += `\n🎯 *ASSERTIVIDADE*\n• Sem Gale: ${efSemGale}%\n• Com Gale: ${efComGale}%\n\n`;
-    msg += `💰 *FINANCEIRO*\n• Inicial: R$ ${fin.bancaInicial.toFixed(2)}\n• Lucro: R$ ${(fin.bancaAtual - fin.bancaInicial).toFixed(2)}\n• Perda: R$ ${fin.perdaTotal.toFixed(2)}\n• Crescimento: ${((fin.bancaAtual/fin.bancaInicial-1)*100).toFixed(2)}%`;
+    msg += `📊 *ESTATÍSTICAS GERAIS*\n• Analises: ${stats.totalAnalises}\n• Win Direto: ${stats.winDireto}\n• Win com Gale: ${stats.winG1 + stats.winG2}\n• Red: ${stats.loss}\n`;
+    msg += `• Green G1: ${stats.winG1} | Green G2: ${stats.winG2}\n\n`;
+    msg += `🏆 *RANKING ATIVOS*\n• Melhor: ${melhorAtivo}\n• Pior: ${piorAtivo}\n\n`;
+    msg += `🎯 *ASSERTIVIDADE*\n• Sem Gale: ${efSemGale}%\n• Com Gale: ${efComGale}%\n\n`;
+    msg += `💰 *FINANCEIRO*\n• Banca: R$ ${fin.bancaAtual.toFixed(2)}\n• Lucro: R$ ${(fin.bancaAtual - fin.bancaInicial).toFixed(2)}\n• Crescimento: ${((fin.bancaAtual/fin.bancaInicial-1)*100).toFixed(2)}%`;
 
     enviarTelegram(msg, false);
 }, 300000);
 
+// --- ROTA STATUS (LIMPA O UNDEFINED) ---
 app.get('/status', (req, res) => {
+    let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
     res.json({
         global: { 
-            winDireto: stats.winDireto, winGales: (stats.winG1 + stats.winG2), loss: stats.loss, 
-            banca: fin.bancaAtual.toFixed(2), lucro: (fin.bancaAtual - fin.bancaInicial).toFixed(2) 
+            winDireto: stats.winDireto, 
+            winGales: (stats.winG1 + stats.winG2), 
+            loss: stats.loss, 
+            precisao: stats.totalAnalises > 0 ? ((totalWins / stats.totalAnalises) * 100).toFixed(1) : "0.0",
+            banca: fin.bancaAtual.toFixed(2), 
+            lucro: (fin.bancaAtual - fin.bancaInicial).toFixed(2) 
         },
-        ativos: Object.keys(motores).map(id => ({ cardId: id, nome: motores[id].nome, preco: motores[id].preco, forca: motores[id].forca, status: motores[id].status }))
+        ativos: Object.keys(motores).map(id => ({ 
+            cardId: id, 
+            nome: motores[id].nome, 
+            preco: motores[id].preco, 
+            forca: motores[id].forca, 
+            status: motores[id].status 
+        }))
     });
 });
 
