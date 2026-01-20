@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K.C.M MULTI-CUSTOM V19 - SERVER CONTROL</title>
+    <style>
+        :root { 
+            --neon-blue: #1e90ff; --neon-green: #00ff88; --neon-red: #ff3355; 
+            --gale: #f0b90b; --bg-dark: #05070a; --royal-blue: #0047AB;
+        }
+        body { background: var(--bg-dark); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+        .logo { font-size: 22px; font-weight: 900; color: #fff; margin: 10px 0; }
+        .logo span { color: var(--neon-blue); font-style: italic; }
+        .painel-global { background: linear-gradient(180deg, #111418 0%, #05070a 100%); border: 2px solid var(--royal-blue); border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0,71,171,0.3); }
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
+        .stat-label { font-size: 9px; color: #888; text-transform: uppercase; margin-bottom: 4px; }
+        .stat-val { font-size: 18px; font-weight: bold; }
+        .grid-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; max-width: 600px; }
+        .card { background: #111418; border-radius: 20px; padding: 12px; border: 1px solid #1e2228; position: relative; transition: 0.3s; }
+        .card.off { opacity: 0.3; filter: grayscale(1); }
+        .thermometer-wrap { width: 100%; height: 8px; background: #222; border-radius: 4px; margin: 8px 0; overflow: hidden; border: 1px solid #333; }
+        .thermometer-fill { height: 100%; width: 50%; transition: 0.5s; background: linear-gradient(90deg, #ff3355, #f0b90b, #00ff88); }
+        .status-box { width: 100%; min-height: 45px; background: #000; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #333; }
+        .status-txt { font-size: 9px; font-weight: bold; color: var(--neon-blue); text-align: center; }
+        .price-val { font-family: monospace; color: var(--gale); text-align: center; font-size: 11px; margin-top: 5px; }
+        .select-ativo { background: #0d0f12; color: #fff; border: 1px solid #444; font-size: 10px; width: 100%; padding: 5px; margin-top: 10px; border-radius: 5px; }
+        .srv-status { font-size: 10px; padding: 5px 15px; border-radius: 20px; background: #111; margin-bottom: 10px; border: 1px solid #333; }
+    </style>
+</head>
+<body>
+
+    <div class="logo">K.C<span>📈</span>M MULTI-CONTROL</div>
+    <div id="conexao" class="srv-status" style="color: #666;">SINCRONIZANDO SERVIDOR...</div>
+
+    <div class="painel-global">
+        <div class="stats-row">
+            <div><span class="stat-label">Wins Direto</span><span class="stat-val" style="color:var(--neon-green)" id="g-direto">0</span></div>
+            <div><span class="stat-label">Wins Gales</span><span class="stat-val" style="color:var(--gale)" id="g-gales">0</span></div>
+            <div><span class="stat-label">Loss Total</span><span class="stat-val" style="color:var(--neon-red)" id="g-loss">0</span></div>
+            <div><span class="stat-label">Precisão</span><span class="stat-val" id="g-precisao">0%</span></div>
+        </div>
+    </div>
+
+    <div class="grid-container" id="grid"></div>
+
+<script>
+    const URL_SERVIDOR = "https://kcmp-riwu.onrender.com";
+
+    // LISTA COMPLETA IGUAL A QUE VOCÊ ENVIOU
+    const LISTA_ATIVOS_HTML = `
+        <option value="OFF" style="color: #ff3355; font-weight: bold;">🔴 DESATIVAR MONITOR</option>
+        <optgroup label="🌍 FOREX (DERIV & QUOTEX)">
+            <option value="frxEURUSD">EUR/USD</option>
+            <option value="frxGBPUSD">GBP/USD</option>
+            <option value="frxUSDJPY">USD/JPY</option>
+            <option value="frxAUDUSD">AUD/USD</option>
+            <option value="frxUSDCAD">USD/CAD</option>
+            <option value="frxUSDCHF">USD/CHF</option>
+            <option value="frxEURGBP">EUR/GBP</option>
+            <option value="frxEURJPY">EUR/JPY</option>
+            <option value="frxGBPJPY">GBP/JPY</option>
+            <option value="frxAUDJPY">AUD/JPY</option>
+            <option value="frxXAUUSD">OURO (XAU/USD)</option>
+        </optgroup>
+        <optgroup label="₿ CRIPTOMOEDAS (24/7)">
+            <option value="cryBTCUSD">BITCOIN (BTC)</option>
+            <option value="cryETHUSD">ETHEREUM (ETH)</option>
+            <option value="cryLTCUSD">LITECOIN (LTC)</option>
+            <option value="cryXRPUSD">RIPPLE (XRP)</option>
+        </optgroup>
+        <optgroup label="🔥 SINTÉTICOS (APENAS DERIV)">
+            <option value="1HZ10V">Volatility 10 (1s)</option>
+            <option value="1HZ25V">Volatility 25 (1s)</option>
+            <option value="1HZ50V">Volatility 50 (1s)</option>
+            <option value="1HZ75V">Volatility 75 (1s)</option>
+            <option value="1HZ100V">Volatility 100 (1s)</option>
+            <option value="R_10">Volatility 10</option>
+            <option value="R_25">Volatility 25</option>
+            <option value="R_50">Volatility 50</option>
+            <option value="R_75">Volatility 75</option>
+            <option value="R_100">Volatility 100</option>
+            <option value="BOOM500">Boom 500</option>
+            <option value="CRASH500">Crash 500</option>
+        </optgroup>`;
+
+    // Criar os 6 cards na inicialização
+    function criarCards() {
+        const grid = document.getElementById('grid');
+        for (let i = 1; i <= 6; i++) {
+            grid.innerHTML += `
+                <div class="card" id="div-card${i}">
+                    <div class="stat-label">MONITOR ${i}</div>
+                    <div class="thermometer-wrap"><div class="thermometer-fill" id="therm-card${i}"></div></div>
+                    <div class="status-box">
+                        <div id="status-card${i}" class="status-txt">AGUARDANDO...</div>
+                    </div>
+                    <div class="price-val" id="price-card${i}">0.0000</div>
+                    <select class="select-ativo" id="select-card${i}" onchange="mudarAtivo('card${i}')">
+                        ${LISTA_ATIVOS_HTML}
+                    </select>
+                </div>`;
+        }
+    }
+
+    async function mudarAtivo(cardId) {
+        const select = document.getElementById(`select-${cardId}`);
+        const ativoId = select.value;
+        const nomeAtivo = select.options[select.selectedIndex].text;
+
+        try {
+            await fetch(`${URL_SERVIDOR}/mudar`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ cardId, ativoId, nomeAtivo })
+            });
+        } catch (e) {
+            console.error("Erro ao mudar ativo");
+        }
+    }
+
+    async function sincronizar() {
+        try {
+            const res = await fetch(`${URL_SERVIDOR}/status`);
+            const dados = await res.json();
+            
+            document.getElementById('conexao').innerText = "CONEXÃO ESTÁVEL - SERVIDOR ATIVO";
+            document.getElementById('conexao').style.color = "var(--neon-green)";
+
+            document.getElementById('g-direto').innerText = dados.global.winDireto;
+            document.getElementById('g-gales').innerText = dados.global.winGales;
+            document.getElementById('g-loss').innerText = dados.global.loss;
+            document.getElementById('g-precisao').innerText = dados.global.precisao + "%";
+
+            dados.ativos.forEach(ativo => {
+                const cardDiv = document.getElementById(`div-${ativo.cardId}`);
+                if (ativo.status === "DESATIVADO") {
+                    cardDiv.classList.add('off');
+                } else {
+                    cardDiv.classList.remove('off');
+                }
+
+                document.getElementById(`price-${ativo.cardId}`).innerText = ativo.preco;
+                document.getElementById(`status-${ativo.cardId}`).innerText = ativo.status;
+                document.getElementById(`therm-${ativo.cardId}`).style.width = ativo.forca + "%";
+            });
+        } catch (e) {
+            document.getElementById('conexao').innerText = "SERVIDOR REINICIANDO...";
+            document.getElementById('conexao').style.color = "var(--neon-red)";
+        }
+    }
+
+    criarCards();
+    setInterval(sincronizar, 1000);
+</script>
+</body>
+</html>
