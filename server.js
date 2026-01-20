@@ -31,7 +31,7 @@ let motores = {};
 function enviarTelegram(msg, comBotao = true) {
     let payload = { chat_id: TG_CHAT_ID, text: msg, parse_mode: "Markdown" };
     if (comBotao) {
-        payload.reply_markup = { inline_keyboard: { text: "📲 ACESSAR CORRETORA", url: LINK_CORRETORA } };
+        payload.reply_markup = { inline_keyboard: [[{ text: "📲 ACESSAR CORRETORA", url: LINK_CORRETORA }]] };
     }
     fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
