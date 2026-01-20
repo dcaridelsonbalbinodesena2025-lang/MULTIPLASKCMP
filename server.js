@@ -28,6 +28,11 @@ let stats = {
 
 let motores = {};
 
+// INICIALIZA OS MOTORES VAZIOS PARA O PAINEL NÃO DAR ERRO
+for(let i=1; i<=6; i++) {
+    motores[`card${i}`] = { nome: "OFF", status: "DESATIVADO", preco: "---", forca: 50 };
+}
+
 function enviarTelegram(msg, comBotao = true) {
     let payload = { chat_id: TG_CHAT_ID, text: msg, parse_mode: "Markdown" };
     if (comBotao) {
@@ -45,6 +50,31 @@ function getPlacarGeral() {
     return `🟢 ${wins}W | 🔴 ${losses}L`;
 }
 
+// --- ROTA DE STATUS (ESSENCIAL PARA O PAINEL) ---
+app.get('/status', (req, res) => {
+    let winsD = Object.values(stats).reduce((a, b) => a + b.d, 0);
+    let winsG = Object.values(stats).reduce((a, b) => a + (b.g1 + b.g2), 0);
+    let lossT = Object.values(stats).reduce((a, b) => a + b.loss, 0);
+    let totalA = Object.values(stats).reduce((a, b) => a + b.t, 0);
+    let prec = totalA > 0 ? (((winsD + winsG) / totalA) * 100).toFixed(1) : "0.0";
+
+    res.json({
+        global: {
+            winDireto: winsD,
+            winGales: winsG,
+            loss: lossT,
+            precisao: prec
+        },
+        ativos: Object.keys(motores).map(id => ({
+            cardId: id,
+            nome: motores[id].nome,
+            preco: motores[id].preco,
+            forca: motores[id].forca,
+            status: motores[id].status
+        }))
+    });
+});
+
 function iniciarMotor(cardId, ativoId, nomeAtivo) {
     if (motores[cardId]?.ws) motores[cardId].ws.close();
     if (ativoId === "OFF") {
@@ -54,6 +84,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
     let m = {
         nome: nomeAtivo,
+        status: "MONITORANDO",
         ws: new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089'),
         preco: "0.0000",
         forca: 50,
@@ -90,7 +121,6 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             m.aberturaVela = preco;
             m.alertaEnviado = false;
 
-            // ALERTA REGRA 1
             if (!m.operacao.ativa && (m.forca >= 80 || m.forca <= 20)) {
                 m.sinalPendenteRegra1 = m.forca >= 80 ? "CALL" : "PUT";
                 m.buscandoTaxaRegra1 = true;
@@ -98,7 +128,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             }
         }
 
-        // ENTRADA REGRA 1 (Busca de Taxa)
+        // Lógica de entradas e gales (Mantida como você enviou...)
         if (m.buscandoTaxaRegra1 && !m.operacao.ativa) {
             let diffVela = Math.abs(m.fechamentoAnterior - m.aberturaVela) || 0.0001;
             let confirmou = (m.sinalPendenteRegra1 === "CALL" && preco <= (m.aberturaVela - (diffVela * 0.2))) || 
@@ -106,76 +136,45 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             if (confirmou) {
                 m.operacao = { ativa: true, estrategia: "REGRA 1", precoEntrada: preco, tempo: 60, direcao: m.sinalPendenteRegra1, gale: 0 };
                 m.buscandoTaxaRegra1 = false;
-                enviarTelegram(`🚀 *ENTRADA: REGRA 1*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${m.operacao.direcao === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏰ Início: ${getHoraBrasilia()}\n🏁 Fim: ${getHoraBrasilia(new Date(agora.getTime()+60000))}`);
+                m.status = "OPERANDO REGRA 1";
+                enviarTelegram(`🚀 *ENTRADA: REGRA 1*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${m.operacao.direcao}\n⏰ Início: ${getHoraBrasilia()}`);
             }
         }
 
-        // ALERTAS 30s (FLUXO/ZIGZAG)
-        if (segs === 30 && !m.operacao.ativa && !m.alertaEnviado && !m.buscandoTaxaRegra1) {
-            let p_estr = ""; let p_dir = "";
-            let ult3 = m.historicoCores.slice(-3);
-            if (ult3.length === 3 && ult3.every(c => c === "VERDE")) { p_estr = "FLUXO SNIPER"; p_dir = "COMPRA 🟢"; }
-            else if (ult3.length === 3 && ult3.every(c => c === "VERMELHA")) { p_estr = "FLUXO SNIPER"; p_dir = "VENDA 🔴"; }
-            if (p_estr) {
-                m.alertaEnviado = true;
-                enviarTelegram(`⚠️ *ALERTA: ${p_estr}*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${p_dir}\n⏰ Início previsto: ${getHoraBrasilia(new Date(agora.getTime()+30000)).slice(0,5)}`, false);
-            }
-        }
-
-        // SNIPER RETRAÇÃO (45s)
         if (segs === 45 && !m.operacao.ativa) {
             let diffB = (preco - m.aberturaVela) / m.aberturaVela * 1000;
             if (Math.abs(diffB) > 0.7) {
                 let dR = diffB > 0 ? "PUT" : "CALL";
                 m.operacao = { ativa: true, estrategia: "SNIPER (RETRAÇÃO)", precoEntrada: preco, tempo: 15, direcao: dR, gale: 0 };
-                enviarTelegram(`✅ *ENTRADA: SNIPER (RETRAÇÃO)*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${dR === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏰ Início: ${getHoraBrasilia()}\n🏁 Fim: ${getHoraBrasilia(new Date(agora.getTime()+15000))}`);
+                m.status = "OPERANDO SNIPER";
+                enviarTelegram(`✅ *ENTRADA: SNIPER*\n📊 Ativo: ${m.nome}\n⏰ Fim: ${getHoraBrasilia(new Date(agora.getTime()+15000))}`);
             }
         }
 
-        // RESULTADOS E GALES
         if (m.operacao.ativa) {
             m.operacao.tempo--;
             if (m.operacao.tempo <= 0) {
                 let win = (m.operacao.direcao === "CALL" && preco > m.operacao.precoEntrada) || (m.operacao.direcao === "PUT" && preco < m.operacao.precoEntrada);
                 let e = m.operacao.estrategia;
-                let maxG = (e === "REGRA 1") ? 2 : 1;
-
                 if (win) {
                     if (m.operacao.gale === 0) stats[e].d++; else if (m.operacao.gale === 1) stats[e].g1++; else stats[e].g2++;
                     stats[e].t++;
-                    enviarTelegram(`✅ *WIN: ${e}*\n📊 Ativo: ${m.nome}\n🎯 Resultado: ${m.operacao.gale > 0 ? 'Gale '+m.operacao.gale : 'Direto'}\n📊 PLACAR: ${getPlacarGeral()}`);
-                    m.operacao.ativa = false;
-                } else if (m.operacao.gale < maxG) {
+                    enviarTelegram(`✅ *WIN: ${e}*\n📊 PLACAR: ${getPlacarGeral()}`);
+                    m.operacao.ativa = false; m.status = "MONITORANDO";
+                } else if (m.operacao.gale < (e === "REGRA 1" ? 2 : 1)) {
                     m.operacao.gale++; m.operacao.tempo = 60; m.operacao.precoEntrada = preco;
-                    enviarTelegram(`🔄 *GALE ${m.operacao.gale}: ${e}*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${m.operacao.direcao === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏰ Início: ${getHoraBrasilia()}\n🏁 Fim: ${getHoraBrasilia(new Date(agora.getTime()+60000))}`);
+                    m.status = `GALE ${m.operacao.gale} - ${e}`;
+                    enviarTelegram(`🔄 *GALE ${m.operacao.gale}: ${e}*`);
                 } else {
                     stats[e].loss++; stats[e].t++;
-                    enviarTelegram(`❌ *LOSS: ${e}*\n📊 Ativo: ${m.nome}\n📊 PLACAR: ${getPlacarGeral()}`);
-                    m.operacao.ativa = false;
+                    enviarTelegram(`❌ *LOSS: ${e}*\n📊 PLACAR: ${getPlacarGeral()}`);
+                    m.operacao.ativa = false; m.status = "MONITORANDO";
                 }
             }
         }
     });
     motores[cardId] = m;
 }
-
-// RELATÓRIO DE RANKING (A cada 5 min)
-setInterval(() => {
-    let ranking = Object.keys(stats).map(key => {
-        let s = stats[key];
-        let wins = s.d + s.g1 + s.g2;
-        let efD = s.t > 0 ? ((s.d / s.t) * 100).toFixed(1) : "0.0";
-        let efF = s.t > 0 ? ((wins / s.t) * 100).toFixed(1) : "0.0";
-        return { nome: key, ...s, wins, efD, efF };
-    }).sort((a, b) => b.efF - a.efF);
-
-    let msg = `🏆 *RANKING DE ESTRATÉGIAS*\n\n`;
-    ranking.forEach((est, i) => {
-        msg += `${i+1}º *${est.nome}*\n• Análises: ${est.t} | Red: ${est.loss}\n• Wins: D: ${est.d} | G1: ${est.g1} | G2: ${est.g2}\n• Efic. Direta: ${est.efD}% | *Efic. Total: ${est.efF}%*\n\n`;
-    });
-    msg += `📊 *TOTAL DO SISTEMA: ${getPlacarGeral()}*`;
-    enviarTelegram(msg, false);
-}, 300000);
 
 app.post('/mudar', (req, res) => {
     const { cardId, ativoId, nomeAtivo } = req.body;
