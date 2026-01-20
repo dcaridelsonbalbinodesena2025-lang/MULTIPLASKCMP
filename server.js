@@ -1,4 +1,4 @@
-const WebSocket = require('ws');
+2const WebSocket = require('ws');
 const fetch = require('node-fetch');
 const express = require('express');
 const cors = require('cors');
@@ -257,6 +257,30 @@ app.post('/mudar', (req, res) => {
     const { cardId, ativoId, nomeAtivo } = req.body;
     iniciarMotor(cardId, ativoId, nomeAtivo);
     res.json({ success: true });
+});
+// COMANDO PARA RECEBER RELATÓRIO FORMATADO PARA PDF
+app.post('/telegram-webhook', (req, res) => {
+    const msg = req.body.message;
+    if (msg && msg.text === '/pdf') {
+        let lucroS = (fin.bancaAtual - fin.bancaInicial).toFixed(2);
+        let winT = Object.values(stats).reduce((a, b) => a + (b.d + b.g1 + b.g2), 0);
+        let lossT = Object.values(stats).reduce((a, b) => a + b.loss, 0);
+        
+        let relatorio = `📄 *RELATÓRIO OFICIAL DE PERFORMANCE*\n`;
+        relatorio += `📅 Data: ${new Date().toLocaleDateString('pt-BR')}\n`;
+        relatorio += `━━━━━━━━━━━━━━━━━━━━\n`;
+        relatorio += `💰 *FINANCEIRO*\n`;
+        relatorio += `• Banca Inicial: R$ ${fin.bancaInicial.toFixed(2)}\n`;
+        relatorio += `• Banca Atual: R$ ${fin.bancaAtual.toFixed(2)}\n`;
+        relatorio += `• Lucro/Prejuízo: R$ ${lucroS}\n`;
+        relatorio += `━━━━━━━━━━━━━━━━━━━━\n`;
+        relatorio += `📊 *PLACAR GERAL*: ${winT}W - ${lossT}L\n`;
+        relatorio += `━━━━━━━━━━━━━━━━━━━━\n`;
+        relatorio += `⚠️ _Para gerar o arquivo PDF, copie esta mensagem e use a função 'Imprimir > Salvar como PDF' do seu celular._`;
+
+        enviarTelegram(relatorio, false);
+    }
+    res.sendStatus(200);
 });
 
 app.listen(PORT, () => console.log(`Super Central ON`));
