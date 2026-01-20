@@ -2,7 +2,7 @@ const WebSocket = require('ws');
 const fetch = require('node-fetch');
 const express = require('express');
 const cors = require('cors');
-const schedule = require('node-cron'); // Certifique-se de ter instalado: npm install node-cron
+const cron = require('node-cron'); // Ajustado para 'cron'
 
 const app = express();
 app.use(express.json());
@@ -43,7 +43,8 @@ for(let i=1; i<=6; i++) {
 }
 
 // --- RESET DIÁRIO (00:00) ---
-schedule.scheduleJob('0 0 * * *', () => {
+// CORREÇÃO: Usando cron.schedule conforme a biblioteca node-cron exige
+cron.schedule('0 0 * * *', () => {
     fin.bancaAtual = fin.bancaInicial;
     fin.lucroHoje = 0;
     enviarTelegram("📅 *SIMULADOR DIÁRIO RESETADO*\nA banca voltou ao valor inicial configurado.", false);
@@ -162,8 +163,8 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             let confirmou = (m.sinalPendenteRegra1 === "CALL" && preco <= (m.aberturaVela - (diffVela * 0.2))) || 
                             (m.sinalPendenteRegra1 === "PUT" && preco >= (m.aberturaVela + (diffVela * 0.2)));
             if (confirmou) {
-                let valorEntrada = fin.bancaAtual * 0.01; // 1% da banca
-                fin.bancaAtual -= valorEntrada; // Desconta da banca
+                let valorEntrada = fin.bancaAtual * 0.01; 
+                fin.bancaAtual -= valorEntrada; 
 
                 m.operacao = { 
                     ativa: true, estrategia: "REGRA 1", precoEntrada: preco, tempo: 60, 
@@ -181,8 +182,8 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             let diffB = (preco - m.aberturaVela) / m.aberturaVela * 1000;
             if (Math.abs(diffB) > 0.7) {
                 let dR = diffB > 0 ? "PUT" : "CALL";
-                let valorEntrada = fin.bancaAtual * 0.01; // 1% da banca
-                fin.bancaAtual -= valorEntrada; // Desconta da banca
+                let valorEntrada = fin.bancaAtual * 0.01; 
+                fin.bancaAtual -= valorEntrada; 
 
                 m.operacao = { 
                     ativa: true, estrategia: "SNIPER (RETRAÇÃO)", precoEntrada: preco, tempo: 15, 
@@ -203,7 +204,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 
                 if (win) {
                     let lucro = m.operacao.valorInvestido * fin.payout;
-                    fin.bancaAtual += (m.operacao.valorInvestido + lucro); // Devolve aposta + lucro
+                    fin.bancaAtual += (m.operacao.valorInvestido + lucro); 
                     
                     if (m.operacao.gale === 0) stats[e].d++; else if (m.operacao.gale === 1) stats[e].g1++; else stats[e].g2++;
                     stats[e].t++;
@@ -211,10 +212,9 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                     enviarTelegram(`✅ *WIN: ${e}*\n🎯 Resultado: ${m.operacao.gale > 0 ? 'Gale '+m.operacao.gale : 'Direto'}\n💰 Lucro: R$ ${lucro.toFixed(2)}\n📊 PLACAR: ${getPlacarGeral()}`);
                     m.operacao.ativa = false; m.status = "MONITORANDO";
                 } else if (m.operacao.gale < (e === "REGRA 1" ? 2 : 1)) {
-                    // Lógica de Dobra no Gale
                     m.operacao.gale++; 
-                    let valorGale = m.operacao.valorInvestido * 2; // Dobra o valor da última aposta
-                    fin.bancaAtual -= valorGale; // Desconta o valor do Gale da banca
+                    let valorGale = m.operacao.valorInvestido * 2; 
+                    fin.bancaAtual -= valorGale; 
                     
                     m.operacao.valorInvestido = valorGale;
                     m.operacao.tempo = 60; 
@@ -223,7 +223,6 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                     
                     enviarTelegram(`🔄 *GALE ${m.operacao.gale}: ${e}*\n📊 Ativo: ${m.nome}\n💰 Valor Gale: R$ ${valorGale.toFixed(2)}\n⏰ Início: ${getHoraBrasilia()}`);
                 } else {
-                    // LOSS FINAL
                     stats[e].loss++; stats[e].t++;
                     enviarTelegram(`❌ *LOSS: ${e}*\n📊 Ativo: ${m.nome}\n📊 PLACAR: ${getPlacarGeral()}`);
                     m.operacao.ativa = false; m.status = "MONITORANDO";
