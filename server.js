@@ -70,8 +70,8 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
             // 1. Lógica RAIANE (Fluxo de 3 velas iguais)
             let ultimas3 = m.historicoCores.slice(-3);
-            if (ultimas3.length === 3 && ultimas3.every(c => c === "VERDE")) { estr = "FLUXO RAIANE"; dir = "CALL"; }
-            else if (ultimas3.length === 3 && ultimas3.every(c => c === "VERMELHA")) { estr = "FLUXO RAIANE"; dir = "PUT"; }
+            if (ultimas3.length === 3 && ultimas3.every(c => c === "VERDE")) { estr = "FLUXO SNIPER"; dir = "CALL"; }
+            else if (ultimas3.length === 3 && ultimas3.every(c => c === "VERMELHA")) { estr = "FLUXO SNAIPER"; dir = "PUT"; }
 
             // 2. Lógica ZIGZAG (Reversão de Padrão)
             if (!estr && m.historicoCores.length >= 2) {
@@ -97,8 +97,8 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             let diff = (preco - m.aberturaVela) / m.aberturaVela * 1000;
             if (Math.abs(diff) > 0.7) { // Esticada forte
                 let dirB = diff > 0 ? "PUT" : "CALL";
-                m.operacao = { ativa: true, estrategia: "SNIPER BERMAN", precoEntrada: preco, tempo: 15, direcao: dirB };
-                enviarTelegram(`🎯 *SNIPER BERMAN (RETRAÇÃO)*\n💎 Ativo: ${m.nome}\n📈 Ação: ${dirB === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏱ Expiração: Final da Vela`);
+                m.operacao = { ativa: true, estrategia: "SNIPER (RETRAÇÃO)", precoEntrada: preco, tempo: 15, direcao: dirB };
+                enviarTelegram(`🎯 *SNIPER (RETRAÇÃO)*\n💎 Ativo: ${m.nome}\n📈 Ação: ${dirB === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏱ Expiração: Final da Vela`);
             }
         }
 
