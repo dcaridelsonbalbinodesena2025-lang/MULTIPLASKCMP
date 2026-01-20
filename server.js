@@ -43,6 +43,22 @@ function enviarTelegram(msg, comBotao = true) {
     }).catch(e => {});
 }
 
+// --- NOVA MENSAGEM: EVOLUÇÃO DA BANCA (ACIONADA NO GREEN) ---
+function msgEvolucaoBanca() {
+    let lucro = fin.bancaAtual - fin.bancaInicial;
+    let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
+    let crescimento = ((fin.bancaAtual / fin.bancaInicial - 1) * 100).toFixed(2);
+
+    let msg = `📈 *EVOLUÇÃO DA BANCA*\n\n`;
+    msg += `✅ Operações Vitoriosas: ${totalWins}\n`;
+    msg += `❌ Operações Perdidas: ${stats.loss}\n`;
+    msg += `💰 Lucro Real: R$ ${lucro.toFixed(2)}\n`;
+    msg += `📉 Prejuízos (Loss): R$ ${fin.perdaTotal.toFixed(2)}\n`;
+    msg += `🚀 Crescimento: ${crescimento}%`;
+    
+    enviarTelegram(msg, false);
+}
+
 function updateAtivo(nome, tipo) {
     if (!rankingAtivos[nome]) rankingAtivos[nome] = { win: 0, loss: 0 };
     if (tipo === 'win') rankingAtivos[nome].win++;
@@ -143,7 +159,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 let ganhou = (m.op.dir === "CALL" && p > m.op.pre) || (m.op.dir === "PUT" && p < m.op.pre);
                 let est = m.op.est;
                 if (ganhou) {
-                    let lucro = m.op.val * fin.payout; fin.bancaAtual += (m.op.val + lucro);
+                    let lucroOp = m.op.val * fin.payout; fin.bancaAtual += (m.op.val + lucroOp);
                     let status = m.op.g === 0 ? "DIRETO" : `GALE ${m.op.g}`;
                     if(m.op.g===0) { stats.winDireto++; rankingEstrategias[est].d++; }
                     else if(m.op.g===1) { stats.winG1++; rankingEstrategias[est].g1++; }
@@ -151,6 +167,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                     stats.totalAnalises++; rankingEstrategias[est].t++;
                     msgResultado(m, est, 'WIN', status);
                     updateAtivo(m.nome, 'win');
+                    msgEvolucaoBanca(); // DISPARA EVOLUÇÃO NO GREEN
                     m.op.ativa = false;
                 } else if (m.op.g < (est === "REGRA 1" ? 2 : 1)) {
                     m.op.g++; 
@@ -177,25 +194,17 @@ function disparar(m, est, dir, val, pre, t) {
     msgEntrada(m, est, dir, new Date(Date.now() + t * 1000));
 }
 
-// --- RELATÓRIO PDF ---
-setInterval(() => {
-    let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
-    let efSemGale = stats.totalAnalises > 0 ? ((stats.winDireto / stats.totalAnalises) * 100).toFixed(1) : 0;
-    let efComGale = stats.totalAnalises > 0 ? ((totalWins / stats.totalAnalises) * 100).toFixed(1) : 0;
-    
-    let rAtivos = Object.entries(rankingAtivos).sort((a,b) => b[1].win - a[1].win);
-    let melhorAtivo = rAtivos[0] ? rAtivos[0][0] : "---";
-    let piorAtivo = rAtivos.length > 1 ? rAtivos[rAtivos.length-1][0] : "---";
-
-    let msg = `📄 *RELATÓRIO DE PERFORMANCE*\n⏰ ${getBrasiliaTime()}\n\n`;
-    msg += `📊 *ESTATÍSTICAS GERAIS*\n• Analises: ${stats.totalAnalises}\n• Win Direto: ${stats.winDireto}\n• Win com Gale: ${stats.winG1 + stats.winG2}\n• Red: ${stats.loss}\n`;
-    msg += `• Green G1: ${stats.winG1} | Green G2: ${stats.winG2}\n\n`;
-    msg += `🏆 *RANKING ATIVOS*\n• Melhor: ${melhorAtivo}\n• Pior: ${piorAtivo}\n\n`;
-    msg += `🎯 *ASSERTIVIDADE*\n• Sem Gale: ${efSemGale}%\n• Com Gale: ${efComGale}%\n\n`;
-    msg += `💰 *FINANCEIRO*\n• Banca: R$ ${fin.bancaAtual.toFixed(2)}\n• Lucro: R$ ${(fin.bancaAtual - fin.bancaInicial).toFixed(2)}\n• Crescimento: ${((fin.bancaAtual/fin.bancaInicial-1)*100).toFixed(2)}%`;
-
-    enviarTelegram(msg, false);
-}, 300000);
+// --- ROTA DE CONFIGURAÇÃO (CORRIGE O BOTÃO SALVAR) ---
+app.post('/config', (req, res) => {
+    if (req.body.banca !== undefined) {
+        fin.bancaInicial = parseFloat(req.body.banca);
+        fin.bancaAtual = parseFloat(req.body.banca);
+    }
+    if (req.body.payout !== undefined) {
+        fin.payout = parseFloat(req.body.payout) / 100;
+    }
+    res.json({ success: true, banca: fin.bancaInicial, payout: fin.payout });
+});
 
 // --- ROTA STATUS (LIMPA O UNDEFINED) ---
 app.get('/status', (req, res) => {
