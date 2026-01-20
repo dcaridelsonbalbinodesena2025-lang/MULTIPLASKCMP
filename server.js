@@ -14,7 +14,7 @@ const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI";
 const TG_CHAT_ID = "-1003355965894"; 
 const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
 
-// Função para pegar a hora de Brasília formatada
+// Função de Horário do Brasil
 function getHoraBrasilia(data = new Date()) {
     return data.toLocaleTimeString('pt-BR', {
         timeZone: 'America/Sao_Paulo',
@@ -24,10 +24,11 @@ function getHoraBrasilia(data = new Date()) {
     });
 }
 
+// Estatísticas com Suporte a Gale para o Relatório
 let stats = {
-    "FLUXO SNIPER": { win: 0, loss: 0, analises: 0 },
-    "SNIPER (RETRAÇÃO)": { win: 0, loss: 0, analises: 0 },
-    "ZIGZAG FRACTAL": { win: 0, loss: 0, analises: 0 }
+    "FLUXO SNIPER": { winDireto: 0, winGale: 0, loss: 0, analises: 0 },
+    "SNIPER (RETRAÇÃO)": { winDireto: 0, winGale: 0, loss: 0, analises: 0 },
+    "ZIGZAG FRACTAL": { winDireto: 0, winGale: 0, loss: 0, analises: 0 }
 };
 
 let motores = {};
@@ -58,7 +59,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
         aberturaVela: 0,
         historicoCores: [],
         alertaEnviado: false,
-        operacao: { ativa: false, estrategia: "", precoEntrada: 0, tempo: 0, direcao: "" }
+        operacao: { ativa: false, estrategia: "", precoEntrada: 0, tempo: 0, direcao: "", gale: 0 }
     };
 
     m.ws.on('open', () => m.ws.send(JSON.stringify({ ticks: ativoId })));
@@ -87,14 +88,13 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             m.alertaEnviado = false;
         }
 
-        // --- ALERTAS (30s) ---
+        // --- ALERTAS ANTECIPADOS COM NOME DA ESTRATÉGIA ---
         if (segs === 30 && !m.operacao.ativa && !m.alertaEnviado) {
-            let p_estr = "";
-            let p_dir = "";
+            let p_estr = ""; let p_dir = "";
             let ultimas3 = m.historicoCores.slice(-3);
             if (ultimas3.length === 3 && ultimas3.every(c => c === "VERDE")) { p_estr = "FLUXO SNIPER"; p_dir = "COMPRA 🟢"; }
             else if (ultimas3.length === 3 && ultimas3.every(c => c === "VERMELHA")) { p_estr = "FLUXO SNIPER"; p_dir = "VENDA 🔴"; }
-
+            
             if (!p_estr && m.historicoCores.length >= 2) {
                 let p = m.historicoCores.slice(-2);
                 if (p[0] === "VERDE" && p[1] === "VERMELHA") { p_estr = "ZIGZAG FRACTAL"; p_dir = "VENDA 🔴"; }
@@ -103,20 +103,17 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
             if (p_estr) {
                 m.alertaEnviado = true;
-                let proxM = new Date(agora.getTime() + 30000);
-                let horaPrevista = getHoraBrasilia(proxM).slice(0, 5); // Apenas HH:mm
-                enviarTelegram(`⚠️ *ALERTA DE POSSÍVEL ENTRADA*\n\n🧠 Estratégia: *${p_estr}*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${p_dir}\n⏰ Horário previsto: ${horaPrevista}\n\n_Fique atento para a confirmação!_`, false);
+                let horaPrev = getHoraBrasilia(new Date(agora.getTime() + 30000)).slice(0, 5);
+                enviarTelegram(`⚠️ *ALERTA DE POSSÍVEL ENTRADA*\n\n🧠 Estratégia: *${p_estr}*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${p_dir}\n⏰ Horário previsto: ${horaPrev}\n\n_Fique atento para a confirmação!_`, false);
             }
         }
 
-        // --- ENTRADA CONFIRMADA (00s) ---
+        // --- ENTRADA CONFIRMADA ---
         if (segs === 0 && !m.operacao.ativa) {
-            let estr = "";
-            let dir = "";
+            let estr = ""; let dir = "";
             let ultimas3 = m.historicoCores.slice(-3);
             if (ultimas3.length === 3 && ultimas3.every(c => c === "VERDE")) { estr = "FLUXO SNIPER"; dir = "CALL"; }
             else if (ultimas3.length === 3 && ultimas3.every(c => c === "VERMELHA")) { estr = "FLUXO SNIPER"; dir = "PUT"; }
-
             if (!estr && m.historicoCores.length >= 2) {
                 let p = m.historicoCores.slice(-2);
                 if (p[0] === "VERDE" && p[1] === "VERMELHA") { estr = "ZIGZAG FRACTAL"; dir = "PUT"; }
@@ -124,63 +121,71 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             }
 
             if (estr) {
-                m.operacao = { ativa: true, estrategia: estr, precoEntrada: preco, tempo: 60, direcao: dir };
-                let hI = getHoraBrasilia();
-                let hF = getHoraBrasilia(new Date(agora.getTime() + 60000));
-                enviarTelegram(`✅ *ENTRADA CONFIRMADA (CLIQUE AGORA 🟢)*\n\n🔥 Estratégia: *${estr}*\n💎 Ativo: ${m.nome}\n📈 Ação: ${dir === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏰ Início: ${hI}\n🏁 Término: ${hF}`);
+                m.operacao = { ativa: true, estrategia: estr, precoEntrada: preco, tempo: 60, direcao: dir, gale: 0 };
+                enviarTelegram(`✅ *ENTRADA CONFIRMADA (CLIQUE AGORA 🟢)*\n\n🔥 Estratégia: *${estr}*\n💎 Ativo: ${m.nome}\n📈 Ação: ${dir === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏰ Início: ${getHoraBrasilia()}\n🏁 Fim: ${getHoraBrasilia(new Date(agora.getTime()+60000))}`);
             }
         }
 
-        // --- SNIPER RETRAÇÃO ---
-        if (segs === 40 && !m.operacao.ativa && !m.alertaEnviado) {
-             let diff = (preco - m.aberturaVela) / m.aberturaVela * 1000;
-             if (Math.abs(diff) > 0.6) {
-                enviarTelegram(`🎯 *ALERTA: SNIPER (RETRAÇÃO)*\n📊 Ativo: ${m.nome}\n⚠️ Vela esticando! Prepare o clique...`, false);
-                m.alertaEnviado = true;
-             }
-        }
-
+        // --- SNIPER (45s) ---
         if (segs === 45 && !m.operacao.ativa) {
             let diffB = (preco - m.aberturaVela) / m.aberturaVela * 1000;
             if (Math.abs(diffB) > 0.7) {
                 let dirB = diffB > 0 ? "PUT" : "CALL";
-                m.operacao = { ativa: true, estrategia: "SNIPER (RETRAÇÃO)", precoEntrada: preco, tempo: 15, direcao: dirB };
-                let hI = getHoraBrasilia();
-                let hF = getHoraBrasilia(new Date(agora.getTime() + 15000));
-                enviarTelegram(`✅ *SNIPER CONFIRMADO (CLIQUE AGORA 🟢)*\n\n🎯 Estratégia: *SNIPER (RETRAÇÃO)*\n💎 Ativo: ${m.nome}\n📈 Ação: ${dirB === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏰ Início: ${hI}\n🏁 Término: ${hF}`);
+                let estrB = "SNIPER (RETRAÇÃO)";
+                m.operacao = { ativa: true, estrategia: estrB, precoEntrada: preco, tempo: 15, direcao: dirB, gale: 0 };
+                enviarTelegram(`✅ *ENTRADA CONFIRMADA (CLIQUE AGORA 🟢)*\n\n🎯 Estratégia: *${estrB}*\n💎 Ativo: ${m.nome}\n📈 Ação: ${dirB === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏰ Início: ${getHoraBrasilia()}\n🏁 Fim: ${getHoraBrasilia(new Date(agora.getTime()+15000))}`);
             }
         }
 
-        // --- RESULTADO ---
+        // --- RESULTADO E GALE ---
         if (m.operacao.ativa) {
             m.operacao.tempo--;
             if (m.operacao.tempo <= 0) {
-                let win = (m.operacao.direcao === "CALL" && preco > m.operacao.precoEntrada) || 
-                          (m.operacao.direcao === "PUT" && preco < m.operacao.precoEntrada);
+                let win = (m.operacao.direcao === "CALL" && preco > m.operacao.precoEntrada) || (m.operacao.direcao === "PUT" && preco < m.operacao.precoEntrada);
                 let e = m.operacao.estrategia;
-                if (stats[e]) {
-                    if (win) stats[e].win++; else stats[e].loss++;
+
+                if (win) {
+                    if (m.operacao.gale === 0) stats[e].winDireto++; else stats[e].winGale++;
                     stats[e].analises++;
-                    enviarTelegram(`${win ? "✅" : "❌"} *RESULTADO: ${win ? "WIN" : "LOSS"}*\n\n🧠 Estratégia: *${e}*\n🌍 Ativo: ${m.nome}\n🟢 W: ${stats[e].win} | 🔴 L: ${stats[e].loss}`);
+                    enviarTelegram(`✅ *RESULTADO: WIN ${m.operacao.gale > 0 ? 'GALE' : 'DIRETO'}*\n🧠 Estratégia: *${e}*\n🌍 Ativo: ${m.nome}\n🟢 Placar: ${stats[e].winDireto + stats[e].winGale}W | 🔴 ${stats[e].loss}L`);
+                    m.operacao.ativa = false;
+                } else if (m.operacao.gale < 1) { // 1 Gale de recuperação
+                    m.operacao.gale++;
+                    m.operacao.tempo = 60;
+                    m.operacao.precoEntrada = preco;
+                    enviarTelegram(`🔄 *RECUPERAÇÃO (GALE 1)*\n🧠 Estratégia: *${e}*\n💎 Ativo: ${m.nome}\n⏰ Fim: ${getHoraBrasilia(new Date(agora.getTime()+60000))}`);
+                } else {
+                    stats[e].loss++;
+                    stats[e].analises++;
+                    enviarTelegram(`❌ *RESULTADO: LOSS*\n🧠 Estratégia: *${e}*\n🌍 Ativo: ${m.nome}\n🟢 Placar: ${stats[e].winDireto + stats[e].winGale}W | 🔴 ${stats[e].loss}L`);
+                    m.operacao.ativa = false;
                 }
-                m.operacao.ativa = false;
             }
         }
     });
     motores[cardId] = m;
 }
 
-// ROTA STATUS E MUDAR PERMANECEM IGUAIS
+// RELATÓRIO COM EFICIÊNCIA DUPLA
+setInterval(() => {
+    let msg = `📊 *RELATÓRIO DE PERFORMANCE*\n\n`;
+    for (let e in stats) {
+        let total = stats[e].analises;
+        let efDireta = total > 0 ? ((stats[e].winDireto / total) * 100).toFixed(1) : "0.0";
+        let efComGale = total > 0 ? (((stats[e].winDireto + stats[e].winGale) / total) * 100).toFixed(1) : "0.0";
+        msg += `🧠 *${e}*:\n• Placar: ${stats[e].winDireto+stats[e].winGale}W - ${stats[e].loss}L\n• Efic. Direta: ${efDireta}%\n• Efic. Final (Gale): ${efComGale}%\n\n`;
+    }
+    enviarTelegram(msg, false);
+}, 300000);
+
+// ROTAS API
 app.get('/status', (req, res) => {
     let ativosStatus = Object.keys(motores).map(id => ({
         cardId: id, nome: motores[id].nome, preco: motores[id].preco,
         status: motores[id].operacao?.ativa ? "OPERANDO..." : (motores[id].nome === "OFF" ? "DESATIVADO" : "ANALISANDO..."),
         forca: motores[id].forca || 50
     }));
-    let totalWins = Object.values(stats).reduce((a, b) => a + b.win, 0);
-    let totalAnalises = Object.values(stats).reduce((a, b) => a + b.analises, 0);
-    let precisao = totalAnalises > 0 ? ((totalWins / totalAnalises) * 100).toFixed(1) : "0.0";
-    res.json({ global: { winDireto: stats["FLUXO SNIPER"].win, winGales: stats["SNIPER (RETRAÇÃO)"].win, loss: Object.values(stats).reduce((a, b) => a + b.loss, 0), precisao: precisao }, ativos: ativosStatus });
+    res.json({ global: { winDireto: 0, loss: 0, precisao: 0 }, ativos: ativosStatus });
 });
 
 app.post('/mudar', (req, res) => {
@@ -189,4 +194,4 @@ app.post('/mudar', (req, res) => {
     res.json({ success: true });
 });
 
-app.listen(PORT, () => console.log(`Multi-Server ON na porta ${PORT}`));
+app.listen(PORT, () => console.log(`Multi-Server ON` ));
