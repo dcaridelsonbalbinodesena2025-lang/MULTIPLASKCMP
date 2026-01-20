@@ -14,6 +14,16 @@ const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI";
 const TG_CHAT_ID = "-1003355965894"; 
 const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
 
+// Função para pegar a hora de Brasília formatada
+function getHoraBrasilia(data = new Date()) {
+    return data.toLocaleTimeString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
 let stats = {
     "FLUXO SNIPER": { win: 0, loss: 0, analises: 0 },
     "SNIPER (RETRAÇÃO)": { win: 0, loss: 0, analises: 0 },
@@ -74,14 +84,13 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 if (m.historicoCores.length > 5) m.historicoCores.shift();
             }
             m.aberturaVela = preco;
-            m.alertaEnviado = false; // Reseta alerta para a nova vela
+            m.alertaEnviado = false;
         }
 
-        // --- 1. ALERTAS (30 SEGUNDOS ANTES) ---
+        // --- ALERTAS (30s) ---
         if (segs === 30 && !m.operacao.ativa && !m.alertaEnviado) {
             let p_estr = "";
             let p_dir = "";
-
             let ultimas3 = m.historicoCores.slice(-3);
             if (ultimas3.length === 3 && ultimas3.every(c => c === "VERDE")) { p_estr = "FLUXO SNIPER"; p_dir = "COMPRA 🟢"; }
             else if (ultimas3.length === 3 && ultimas3.every(c => c === "VERMELHA")) { p_estr = "FLUXO SNIPER"; p_dir = "VENDA 🔴"; }
@@ -94,17 +103,17 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
             if (p_estr) {
                 m.alertaEnviado = true;
-                let proxMinuto = new Date(agora.getTime() + 30000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                enviarTelegram(`⚠️ *ALERTA DE POSSÍVEL ENTRADA*\n\n🧠 Estratégia: *${p_estr}*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${p_dir}\n⏰ Horário previsto: ${proxMinuto}\n\n_Fique atento para a confirmação!_`, false);
+                let proxM = new Date(agora.getTime() + 30000);
+                let horaPrevista = getHoraBrasilia(proxM).slice(0, 5); // Apenas HH:mm
+                enviarTelegram(`⚠️ *ALERTA DE POSSÍVEL ENTRADA*\n\n🧠 Estratégia: *${p_estr}*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${p_dir}\n⏰ Horário previsto: ${horaPrevista}\n\n_Fique atento para a confirmação!_`, false);
             }
         }
 
-        // --- 2. ENTRADAS CONFIRMADAS (SEGUNDO 00) ---
+        // --- ENTRADA CONFIRMADA (00s) ---
         if (segs === 0 && !m.operacao.ativa) {
             let estr = "";
             let dir = "";
             let ultimas3 = m.historicoCores.slice(-3);
-            
             if (ultimas3.length === 3 && ultimas3.every(c => c === "VERDE")) { estr = "FLUXO SNIPER"; dir = "CALL"; }
             else if (ultimas3.length === 3 && ultimas3.every(c => c === "VERMELHA")) { estr = "FLUXO SNIPER"; dir = "PUT"; }
 
@@ -116,13 +125,13 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
             if (estr) {
                 m.operacao = { ativa: true, estrategia: estr, precoEntrada: preco, tempo: 60, direcao: dir };
-                let hI = agora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-                let hF = new Date(agora.getTime() + 60000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                let hI = getHoraBrasilia();
+                let hF = getHoraBrasilia(new Date(agora.getTime() + 60000));
                 enviarTelegram(`✅ *ENTRADA CONFIRMADA (CLIQUE AGORA 🟢)*\n\n🔥 Estratégia: *${estr}*\n💎 Ativo: ${m.nome}\n📈 Ação: ${dir === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏰ Início: ${hI}\n🏁 Término: ${hF}`);
             }
         }
 
-        // --- 3. SNIPER RETRAÇÃO (ALERTA AOS 40s E ENTRADA AOS 45s) ---
+        // --- SNIPER RETRAÇÃO ---
         if (segs === 40 && !m.operacao.ativa && !m.alertaEnviado) {
              let diff = (preco - m.aberturaVela) / m.aberturaVela * 1000;
              if (Math.abs(diff) > 0.6) {
@@ -136,13 +145,13 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             if (Math.abs(diffB) > 0.7) {
                 let dirB = diffB > 0 ? "PUT" : "CALL";
                 m.operacao = { ativa: true, estrategia: "SNIPER (RETRAÇÃO)", precoEntrada: preco, tempo: 15, direcao: dirB };
-                let hI = agora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
-                let hF = new Date(agora.getTime() + 15000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                let hI = getHoraBrasilia();
+                let hF = getHoraBrasilia(new Date(agora.getTime() + 15000));
                 enviarTelegram(`✅ *SNIPER CONFIRMADO (CLIQUE AGORA 🟢)*\n\n🎯 Estratégia: *SNIPER (RETRAÇÃO)*\n💎 Ativo: ${m.nome}\n📈 Ação: ${dirB === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n⏰ Início: ${hI}\n🏁 Término: ${hF}`);
             }
         }
 
-        // --- GERENCIAMENTO DE RESULTADO ---
+        // --- RESULTADO ---
         if (m.operacao.ativa) {
             m.operacao.tempo--;
             if (m.operacao.tempo <= 0) {
@@ -161,11 +170,10 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
     motores[cardId] = m;
 }
 
+// ROTA STATUS E MUDAR PERMANECEM IGUAIS
 app.get('/status', (req, res) => {
     let ativosStatus = Object.keys(motores).map(id => ({
-        cardId: id,
-        nome: motores[id].nome,
-        preco: motores[id].preco,
+        cardId: id, nome: motores[id].nome, preco: motores[id].preco,
         status: motores[id].operacao?.ativa ? "OPERANDO..." : (motores[id].nome === "OFF" ? "DESATIVADO" : "ANALISANDO..."),
         forca: motores[id].forca || 50
     }));
