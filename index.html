@@ -12,10 +12,20 @@
         body { background: var(--bg-dark); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
         .logo { font-size: 22px; font-weight: 900; color: #fff; margin: 10px 0; }
         .logo span { color: var(--neon-blue); font-style: italic; }
+        
+        /* PAINEL FINANCEIRO */
+        .painel-financeiro { background: #111418; border: 2px solid var(--neon-green); border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; margin-bottom: 10px; box-shadow: 0 0 15px rgba(0,255,136,0.2); }
+        .fin-row { display: flex; gap: 10px; justify-content: space-between; align-items: flex-end; margin-bottom: 15px; }
+        .fin-input-group { flex: 1; }
+        .fin-input-group label { font-size: 10px; color: #888; display: block; margin-bottom: 4px; }
+        .fin-input { width: 90%; background: #000; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 5px; font-weight: bold; }
+        .btn-salvar { background: var(--neon-green); color: #000; border: none; padding: 10px 15px; border-radius: 5px; font-weight: 900; cursor: pointer; height: 35px; }
+        
         .painel-global { background: linear-gradient(180deg, #111418 0%, #05070a 100%); border: 2px solid var(--royal-blue); border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0,71,171,0.3); }
         .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
         .stat-label { font-size: 9px; color: #888; text-transform: uppercase; margin-bottom: 4px; }
         .stat-val { font-size: 18px; font-weight: bold; }
+        
         .grid-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; max-width: 600px; }
         .card { background: #111418; border-radius: 20px; padding: 12px; border: 1px solid #1e2228; position: relative; transition: 0.3s; }
         .card.off { opacity: 0.3; filter: grayscale(1); }
@@ -33,6 +43,26 @@
     <div class="logo">K.C<span>📈</span>M MULTI/ESTRATEGIA-CONTROL</div>
     <div id="conexao" class="srv-status" style="color: #666;">SINCRONIZANDO SERVIDOR...</div>
 
+    <div class="painel-financeiro">
+        <div class="fin-row">
+            <div class="fin-input-group">
+                <label>BANCA INICIAL (R$)</label>
+                <input type="number" id="inpBanca" class="fin-input" value="5000">
+            </div>
+            <div class="fin-input-group">
+                <label>PAYOUT (%)</label>
+                <input type="number" id="inpPayout" class="fin-input" value="95">
+            </div>
+            <button class="btn-salvar" onclick="salvarConfigFinanceira()">SALVAR</button>
+        </div>
+        <div class="stats-row" style="border-top: 1px solid #222; padding-top: 10px;">
+            <div><span class="stat-label">Banca Atual</span><span class="stat-val" style="color:#fff" id="display-banca">R$ 0,00</span></div>
+            <div><span class="stat-label">Lucro Hoje</span><span class="stat-val" style="color:var(--neon-green)" id="display-lucro">R$ 0,00</span></div>
+            <div><span class="stat-label">Crescimento</span><span class="stat-val" style="color:var(--neon-blue)" id="display-crescimento">0%</span></div>
+            <div><span class="stat-label">Simulador</span><span class="stat-val" style="color:var(--gale)">1%</span></div>
+        </div>
+    </div>
+
     <div class="painel-global">
         <div class="stats-row">
             <div><span class="stat-label">Wins Direto</span><span class="stat-val" style="color:var(--neon-green)" id="g-direto">0</span></div>
@@ -47,7 +77,6 @@
 <script>
     const URL_SERVIDOR = "https://multiplaskcmp.onrender.com";
 
-    // LISTA COMPLETA IGUAL A QUE VOCÊ ENVIOU
     const LISTA_ATIVOS_HTML = `
         <option value="OFF" style="color: #ff3355; font-weight: bold;">🔴 DESATIVAR MONITOR</option>
         <optgroup label="🌍 FOREX (DERIV & QUOTEX)">
@@ -84,7 +113,6 @@
             <option value="CRASH500">Crash 500</option>
         </optgroup>`;
 
-    // Criar os 6 cards na inicialização
     function criarCards() {
         const grid = document.getElementById('grid');
         for (let i = 1; i <= 6; i++) {
@@ -103,20 +131,33 @@
         }
     }
 
+    // FUNÇÃO PARA ENVIAR CONFIGURAÇÃO DE BANCA
+    async function salvarConfigFinanceira() {
+        const banca = document.getElementById('inpBanca').value;
+        const payout = document.getElementById('inpPayout').value;
+        try {
+            const res = await fetch(`${URL_SERVIDOR}/config-financeira`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ banca: parseFloat(banca), payout: parseFloat(payout) })
+            });
+            if(res.ok) alert("Banca Inicial e Payout Atualizados!");
+        } catch (e) {
+            alert("Erro ao salvar dados financeiros.");
+        }
+    }
+
     async function mudarAtivo(cardId) {
         const select = document.getElementById(`select-${cardId}`);
         const ativoId = select.value;
         const nomeAtivo = select.options[select.selectedIndex].text;
-
         try {
             await fetch(`${URL_SERVIDOR}/mudar`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ cardId, ativoId, nomeAtivo })
             });
-        } catch (e) {
-            console.error("Erro ao mudar ativo");
-        }
+        } catch (e) { console.error("Erro ao mudar ativo"); }
     }
 
     async function sincronizar() {
@@ -127,18 +168,25 @@
             document.getElementById('conexao').innerText = "CONEXÃO ESTÁVEL - SERVIDOR ATIVO";
             document.getElementById('conexao').style.color = "var(--neon-green)";
 
+            // Dados Globais e Financeiros
             document.getElementById('g-direto').innerText = dados.global.winDireto;
             document.getElementById('g-gales').innerText = dados.global.winGales;
             document.getElementById('g-loss').innerText = dados.global.loss;
             document.getElementById('g-precisao').innerText = dados.global.precisao + "%";
+            
+            // Novos Displays Financeiros
+            document.getElementById('display-banca').innerText = "R$ " + dados.global.banca;
+            document.getElementById('display-lucro').innerText = "R$ " + dados.global.lucro;
+            
+            // Cálculo de crescimento no front-end
+            let bancaIni = parseFloat(document.getElementById('inpBanca').value);
+            let cresc = ((parseFloat(dados.global.banca) / bancaIni - 1) * 100).toFixed(2);
+            document.getElementById('display-crescimento').innerText = cresc + "%";
 
             dados.ativos.forEach(ativo => {
                 const cardDiv = document.getElementById(`div-${ativo.cardId}`);
-                if (ativo.status === "DESATIVADO") {
-                    cardDiv.classList.add('off');
-                } else {
-                    cardDiv.classList.remove('off');
-                }
+                if (ativo.status === "DESATIVADO") cardDiv.classList.add('off');
+                else cardDiv.classList.remove('off');
 
                 document.getElementById(`price-${ativo.cardId}`).innerText = ativo.preco;
                 document.getElementById(`status-${ativo.cardId}`).innerText = ativo.status;
