@@ -1,11 +1,16 @@
 const WebSocket = require('ws');
 const fetch = require('node-fetch');
 const express = require('express');
+const cors = require('cors'); // ADICIONADO
 
 const app = express();
 app.use(express.json());
+app.use(cors()); // ADICIONADO - Libera a conexão com o index.html
 
-const PORT = 3001; // Porta diferente para não dar conflito com o seu oficial
+// Altere a porta para process.env.PORT para o Render funcionar
+const PORT = process.env.PORT || 3000; 
+
+// ... restante do código igual
 
 // --- CONFIGURAÇÕES ---
 const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI"; 
