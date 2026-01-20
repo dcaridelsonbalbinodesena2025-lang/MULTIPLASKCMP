@@ -145,5 +145,29 @@ app.post('/mudar', (req, res) => {
     iniciarMotor(cardId, ativoId, nomeAtivo);
     res.json({ success: true });
 });
+app.get('/status', (req, res) => {
+    let ativosStatus = Object.keys(motores).map(id => ({
+        cardId: id,
+        nome: motores[id].nome,
+        preco: motores[id].preco || "0.0000",
+        status: motores[id].operacao.ativa ? "OPERANDO..." : "ANALISANDO...",
+        forca: 50 // Você pode implementar o cálculo de força aqui se desejar
+    }));
+    
+    // Cálculo de precisão global para o painel
+    let totalWins = Object.values(stats).reduce((a, b) => a + b.win, 0);
+    let totalAnalises = Object.values(stats).reduce((a, b) => a + b.analises, 0);
+    let precisao = totalAnalises > 0 ? ((totalWins / totalAnalises) * 100).toFixed(1) : "0.0";
+
+    res.json({ 
+        global: { 
+            winDireto: stats["FLUXO RAIANE"].win, // Exemplo de mapeamento
+            winGales: stats["ZIGZAG FRACTAL"].win, 
+            loss: Object.values(stats).reduce((a, b) => a + b.loss, 0),
+            precisao: precisao
+        }, 
+        ativos: ativosStatus 
+    });
+});
 
 app.listen(PORT, () => console.log(`Multi-Server ON na porta ${PORT}`));
