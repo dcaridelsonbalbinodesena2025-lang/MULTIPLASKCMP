@@ -2,6 +2,7 @@ const WebSocket = require('ws');
 const fetch = require('node-fetch');
 const express = require('express');
 const cors = require('cors');
+const schedule = require('node-cron'); // Certifique-se de ter instalado: npm install node-cron
 
 const app = express();
 app.use(express.json());
@@ -13,6 +14,14 @@ const PORT = process.env.PORT || 3000;
 const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI"; 
 const TG_CHAT_ID = "-1003355965894"; 
 const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
+
+// --- GESTÃO FINANCEIRA (SIMULADOR) ---
+let fin = {
+    bancaInicial: 5000,
+    bancaAtual: 5000,
+    payout: 0.95,
+    lucroHoje: 0
+};
 
 function getHoraBrasilia(data = new Date()) {
     return data.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -28,10 +37,17 @@ let stats = {
 
 let motores = {};
 
-// INICIALIZA OS MOTORES VAZIOS PARA O PAINEL NÃO DAR ERRO
+// Inicializa motores vazios
 for(let i=1; i<=6; i++) {
     motores[`card${i}`] = { nome: "OFF", status: "DESATIVADO", preco: "---", forca: 50 };
 }
+
+// --- RESET DIÁRIO (00:00) ---
+schedule.scheduleJob('0 0 * * *', () => {
+    fin.bancaAtual = fin.bancaInicial;
+    fin.lucroHoje = 0;
+    enviarTelegram("📅 *SIMULADOR DIÁRIO RESETADO*\nA banca voltou ao valor inicial configurado.", false);
+});
 
 function enviarTelegram(msg, comBotao = true) {
     let payload = { chat_id: TG_CHAT_ID, text: msg, parse_mode: "Markdown" };
@@ -47,10 +63,20 @@ function enviarTelegram(msg, comBotao = true) {
 function getPlacarGeral() {
     let wins = Object.values(stats).reduce((a, b) => a + (b.d + b.g1 + b.g2), 0);
     let losses = Object.values(stats).reduce((a, b) => a + b.loss, 0);
-    return `🟢 ${wins}W | 🔴 ${losses}L`;
+    let crescimento = ((fin.bancaAtual / fin.bancaInicial - 1) * 100).toFixed(2);
+    return `🟢 ${wins}W | 🔴 ${losses}L\n💰 Banca: R$ ${fin.bancaAtual.toFixed(2)} (${crescimento}%)`;
 }
 
-// --- ROTA DE STATUS (ESSENCIAL PARA O PAINEL) ---
+// ROTA PARA O INDEX CONFIGURAR BANCA E PAYOUT
+app.post('/config-financeira', (req, res) => {
+    const { banca, payout } = req.body;
+    fin.bancaInicial = parseFloat(banca);
+    fin.bancaAtual = parseFloat(banca);
+    fin.payout = parseFloat(payout) / 100;
+    fin.lucroHoje = 0;
+    res.json({ success: true });
+});
+
 app.get('/status', (req, res) => {
     let winsD = Object.values(stats).reduce((a, b) => a + b.d, 0);
     let winsG = Object.values(stats).reduce((a, b) => a + (b.g1 + b.g2), 0);
@@ -63,7 +89,9 @@ app.get('/status', (req, res) => {
             winDireto: winsD,
             winGales: winsG,
             loss: lossT,
-            precisao: prec
+            precisao: prec,
+            banca: fin.bancaAtual.toFixed(2),
+            lucro: (fin.bancaAtual - fin.bancaInicial).toFixed(2)
         },
         ativos: Object.keys(motores).map(id => ({
             cardId: id,
@@ -94,7 +122,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
         alertaEnviado: false,
         buscandoTaxaRegra1: false,
         sinalPendenteRegra1: null,
-        operacao: { ativa: false, estrategia: "", precoEntrada: 0, tempo: 0, direcao: "", gale: 0 }
+        operacao: { ativa: false, estrategia: "", precoEntrada: 0, tempo: 0, direcao: "", gale: 0, valorInvestido: 0, valorRaiz: 0 }
     };
 
     m.ws.on('open', () => m.ws.send(JSON.stringify({ ticks: ativoId })));
@@ -128,46 +156,76 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             }
         }
 
-        // Lógica de entradas e gales (Mantida como você enviou...)
+        // --- ENTRADA REGRA 1 ---
         if (m.buscandoTaxaRegra1 && !m.operacao.ativa) {
             let diffVela = Math.abs(m.fechamentoAnterior - m.aberturaVela) || 0.0001;
             let confirmou = (m.sinalPendenteRegra1 === "CALL" && preco <= (m.aberturaVela - (diffVela * 0.2))) || 
                             (m.sinalPendenteRegra1 === "PUT" && preco >= (m.aberturaVela + (diffVela * 0.2)));
             if (confirmou) {
-                m.operacao = { ativa: true, estrategia: "REGRA 1", precoEntrada: preco, tempo: 60, direcao: m.sinalPendenteRegra1, gale: 0 };
+                let valorEntrada = fin.bancaAtual * 0.01; // 1% da banca
+                fin.bancaAtual -= valorEntrada; // Desconta da banca
+
+                m.operacao = { 
+                    ativa: true, estrategia: "REGRA 1", precoEntrada: preco, tempo: 60, 
+                    direcao: m.sinalPendenteRegra1, gale: 0, 
+                    valorInvestido: valorEntrada, valorRaiz: valorEntrada 
+                };
                 m.buscandoTaxaRegra1 = false;
                 m.status = "OPERANDO REGRA 1";
-                enviarTelegram(`🚀 *ENTRADA: REGRA 1*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${m.operacao.direcao}\n⏰ Início: ${getHoraBrasilia()}`);
+                enviarTelegram(`🚀 *ENTRADA: REGRA 1*\n📊 Ativo: ${m.nome}\n⚡ Direção: ${m.operacao.direcao}\n💰 Valor: R$ ${valorEntrada.toFixed(2)}\n⏰ Início: ${getHoraBrasilia()}`);
             }
         }
 
+        // --- ENTRADA SNIPER ---
         if (segs === 45 && !m.operacao.ativa) {
             let diffB = (preco - m.aberturaVela) / m.aberturaVela * 1000;
             if (Math.abs(diffB) > 0.7) {
                 let dR = diffB > 0 ? "PUT" : "CALL";
-                m.operacao = { ativa: true, estrategia: "SNIPER (RETRAÇÃO)", precoEntrada: preco, tempo: 15, direcao: dR, gale: 0 };
+                let valorEntrada = fin.bancaAtual * 0.01; // 1% da banca
+                fin.bancaAtual -= valorEntrada; // Desconta da banca
+
+                m.operacao = { 
+                    ativa: true, estrategia: "SNIPER (RETRAÇÃO)", precoEntrada: preco, tempo: 15, 
+                    direcao: dR, gale: 0, 
+                    valorInvestido: valorEntrada, valorRaiz: valorEntrada 
+                };
                 m.status = "OPERANDO SNIPER";
-                enviarTelegram(`✅ *ENTRADA: SNIPER*\n📊 Ativo: ${m.nome}\n⏰ Fim: ${getHoraBrasilia(new Date(agora.getTime()+15000))}`);
+                enviarTelegram(`✅ *ENTRADA: SNIPER*\n📊 Ativo: ${m.nome}\n💰 Valor: R$ ${valorEntrada.toFixed(2)}\n⏰ Fim: ${getHoraBrasilia(new Date(agora.getTime()+15000))}`);
             }
         }
 
+        // --- GERENCIADOR DE RESULTADOS E GALES ---
         if (m.operacao.ativa) {
             m.operacao.tempo--;
             if (m.operacao.tempo <= 0) {
                 let win = (m.operacao.direcao === "CALL" && preco > m.operacao.precoEntrada) || (m.operacao.direcao === "PUT" && preco < m.operacao.precoEntrada);
                 let e = m.operacao.estrategia;
+                
                 if (win) {
+                    let lucro = m.operacao.valorInvestido * fin.payout;
+                    fin.bancaAtual += (m.operacao.valorInvestido + lucro); // Devolve aposta + lucro
+                    
                     if (m.operacao.gale === 0) stats[e].d++; else if (m.operacao.gale === 1) stats[e].g1++; else stats[e].g2++;
                     stats[e].t++;
-                    enviarTelegram(`✅ *WIN: ${e}*\n📊 PLACAR: ${getPlacarGeral()}`);
+                    
+                    enviarTelegram(`✅ *WIN: ${e}*\n🎯 Resultado: ${m.operacao.gale > 0 ? 'Gale '+m.operacao.gale : 'Direto'}\n💰 Lucro: R$ ${lucro.toFixed(2)}\n📊 PLACAR: ${getPlacarGeral()}`);
                     m.operacao.ativa = false; m.status = "MONITORANDO";
                 } else if (m.operacao.gale < (e === "REGRA 1" ? 2 : 1)) {
-                    m.operacao.gale++; m.operacao.tempo = 60; m.operacao.precoEntrada = preco;
+                    // Lógica de Dobra no Gale
+                    m.operacao.gale++; 
+                    let valorGale = m.operacao.valorInvestido * 2; // Dobra o valor da última aposta
+                    fin.bancaAtual -= valorGale; // Desconta o valor do Gale da banca
+                    
+                    m.operacao.valorInvestido = valorGale;
+                    m.operacao.tempo = 60; 
+                    m.operacao.precoEntrada = preco;
                     m.status = `GALE ${m.operacao.gale} - ${e}`;
-                    enviarTelegram(`🔄 *GALE ${m.operacao.gale}: ${e}*`);
+                    
+                    enviarTelegram(`🔄 *GALE ${m.operacao.gale}: ${e}*\n📊 Ativo: ${m.nome}\n💰 Valor Gale: R$ ${valorGale.toFixed(2)}\n⏰ Início: ${getHoraBrasilia()}`);
                 } else {
+                    // LOSS FINAL
                     stats[e].loss++; stats[e].t++;
-                    enviarTelegram(`❌ *LOSS: ${e}*\n📊 PLACAR: ${getPlacarGeral()}`);
+                    enviarTelegram(`❌ *LOSS: ${e}*\n📊 Ativo: ${m.nome}\n📊 PLACAR: ${getPlacarGeral()}`);
                     m.operacao.ativa = false; m.status = "MONITORANDO";
                 }
             }
@@ -175,6 +233,26 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
     });
     motores[cardId] = m;
 }
+
+// RELATÓRIO DE RANKING E PERFORMANCE (A cada 5 min)
+setInterval(() => {
+    let ranking = Object.keys(stats).map(key => {
+        let s = stats[key];
+        let totalWins = s.d + s.g1 + s.g2;
+        let efDireta = s.t > 0 ? ((s.d / s.t) * 100).toFixed(1) : "0.0";
+        let assertividade = s.t > 0 ? ((totalWins / s.t) * 100).toFixed(1) : "0.0";
+        return { nome: key, ...s, totalWins, efDireta, assertividade };
+    }).sort((a, b) => b.assertividade - a.assertividade);
+
+    let msg = `🏆 *RANKING DE PERFORMANCE*\n\n`;
+    ranking.forEach((est, i) => {
+        msg += `${i+1}º *${est.nome}*\n• Wins: D: ${est.d} | G1: ${est.g1} | G2: ${est.g2}\n• Efic. s/ Gale: ${est.efDireta}%\n• *ASSERTIVIDADE: ${est.assertividade}%*\n\n`;
+    });
+    
+    let lucroS = (fin.bancaAtual - fin.bancaInicial).toFixed(2);
+    msg += `💰 *FINANCEIRO:* R$ ${fin.bancaAtual.toFixed(2)}\n📈 *LUCRO:* R$ ${lucroS}\n📊 *TOTAL:* ${getPlacarGeral()}`;
+    enviarTelegram(msg, false);
+}, 300000);
 
 app.post('/mudar', (req, res) => {
     const { cardId, ativoId, nomeAtivo } = req.body;
