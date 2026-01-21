@@ -19,17 +19,8 @@
         .fin-input-group { flex: 1; }
         .fin-input-group label { font-size: 10px; color: #888; display: block; margin-bottom: 4px; }
         .fin-input { width: 90%; background: #000; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 5px; font-weight: bold; }
-        .btn-salvar { background: var(--neon-green); color: #000; border: none; padding: 10px 15px; border-radius: 5px; font-weight: 900; cursor: pointer; height: 35px; width: 100%; margin-top: 10px; }
+        .btn-salvar { background: var(--neon-green); color: #000; border: none; padding: 10px 15px; border-radius: 5px; font-weight: 900; cursor: pointer; height: 35px; }
         
-        /* PAINEL ESTRATÉGIAS */
-        .painel-estrat { background: #111418; border: 1px solid #333; border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; margin-bottom: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .estrat-card { background: #000; padding: 10px; border-radius: 10px; border: 1px solid #222; text-align: center; }
-        .estrat-name { font-size: 10px; font-weight: bold; margin-bottom: 5px; color: #888; }
-        .btn-toggle { padding: 5px 10px; font-size: 10px; font-weight: bold; border-radius: 5px; border: none; cursor: pointer; width: 100%; margin-bottom: 5px; }
-        .btn-on { background: var(--neon-green); color: #000; }
-        .btn-off { background: var(--neon-red); color: #fff; }
-        .estrat-stats { font-size: 10px; color: #fff; display: flex; justify-content: space-around; }
-
         .painel-global { background: linear-gradient(180deg, #111418 0%, #05070a 100%); border: 2px solid var(--royal-blue); border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0,71,171,0.3); }
         .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; text-align: center; }
         .stat-label { font-size: 9px; color: #888; text-transform: uppercase; margin-bottom: 4px; }
@@ -62,37 +53,14 @@
                 <label>PAYOUT (%)</label>
                 <input type="number" id="inpPayout" class="fin-input" value="95">
             </div>
+            <button class="btn-salvar" onclick="salvarConfigFinanceira()">SALVAR</button>
         </div>
-        <div class="stats-row" style="border-top: 1px solid #222; padding-top: 10px; margin-bottom: 10px;">
+        <div class="stats-row" style="border-top: 1px solid #222; padding-top: 10px;">
             <div><span class="stat-label">Banca Atual</span><span class="stat-val" style="color:#fff" id="display-banca">R$ 0,00</span></div>
             <div><span class="stat-label">Lucro Hoje</span><span class="stat-val" style="color:var(--neon-green)" id="display-lucro">R$ 0,00</span></div>
             <div><span class="stat-label">Crescimento</span><span class="stat-val" style="color:var(--neon-blue)" id="display-crescimento">0%</span></div>
             <div><span class="stat-label">Simulador</span><span class="stat-val" style="color:var(--gale)">1%</span></div>
         </div>
-    </div>
-
-    <div class="painel-estrat">
-        <div class="estrat-card">
-            <div class="estrat-name">REGRA 1</div>
-            <button id="btn-regra1" class="btn-toggle btn-on" onclick="toggleEstrat('REGRA 1')">ATIVO</button>
-            <div class="estrat-stats"><span id="stats-regra1-w" style="color:var(--neon-green)">0W</span> <span id="stats-regra1-l" style="color:var(--neon-red)">0L</span></div>
-        </div>
-        <div class="estrat-card">
-            <div class="estrat-name">FLUXO SNIPER</div>
-            <button id="btn-fluxosniper" class="btn-toggle btn-on" onclick="toggleEstrat('FLUXO SNIPER')">ATIVO</button>
-            <div class="estrat-stats"><span id="stats-fluxosniper-w" style="color:var(--neon-green)">0W</span> <span id="stats-fluxosniper-l" style="color:var(--neon-red)">0L</span></div>
-        </div>
-        <div class="estrat-card">
-            <div class="estrat-name">ZIGZAG FRACTAL</div>
-            <button id="btn-zigzag" class="btn-toggle btn-on" onclick="toggleEstrat('ZIGZAG FRACTAL')">ATIVO</button>
-            <div class="estrat-stats"><span id="stats-zigzag-w" style="color:var(--neon-green)">0W</span> <span id="stats-zigzag-l" style="color:var(--neon-red)">0L</span></div>
-        </div>
-        <div class="estrat-card">
-            <div class="estrat-name">SNIPER (RETRAÇÃO)</div>
-            <button id="btn-retra" class="btn-toggle btn-on" onclick="toggleEstrat('SNIPER (RETRAÇÃO)')">ATIVO</button>
-            <div class="estrat-stats"><span id="stats-retra-w" style="color:var(--neon-green)">0W</span> <span id="stats-retra-l" style="color:var(--neon-red)">0L</span></div>
-        </div>
-        <button class="btn-salvar" style="grid-column: span 2;" onclick="salvarTudo()">SALVAR CONFIGURAÇÕES</button>
     </div>
 
     <div class="painel-global">
@@ -108,13 +76,6 @@
 
 <script>
     const URL_SERVIDOR = "https://multiplaskcmp.onrender.com";
-    
-    let localEstatutos = {
-        "REGRA 1": true,
-        "FLUXO SNIPER": true,
-        "ZIGZAG FRACTAL": true,
-        "SNIPER (RETRAÇÃO)": true
-    };
 
     const LISTA_ATIVOS_HTML = `
         <option value="OFF" style="color: #ff3355; font-weight: bold;">🔴 DESATIVAR MONITOR</option>
@@ -170,43 +131,20 @@
         }
     }
 
-    function toggleEstrat(nome) {
-        localEstatutos[nome] = !localEstatutos[nome];
-        atualizarBotoesUI();
-    }
-
-    function atualizarBotoesUI() {
-        const ids = {
-            "REGRA 1": "btn-regra1",
-            "FLUXO SNIPER": "btn-fluxosniper",
-            "ZIGZAG FRACTAL": "btn-zigzag",
-            "SNIPER (RETRAÇÃO)": "btn-retra"
-        };
-        for(let key in localEstatutos) {
-            const btn = document.getElementById(ids[key]);
-            if(localEstatutos[key]) {
-                btn.innerText = "ATIVO"; btn.className = "btn-toggle btn-on";
-            } else {
-                btn.innerText = "DESATIVADO"; btn.className = "btn-toggle btn-off";
-            }
-        }
-    }
-
-    async function salvarTudo() {
+    // FUNÇÃO PARA ENVIAR CONFIGURAÇÃO DE BANCA
+    async function salvarConfigFinanceira() {
         const banca = document.getElementById('inpBanca').value;
         const payout = document.getElementById('inpPayout').value;
         try {
             const res = await fetch(`${URL_SERVIDOR}/config-financeira`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ 
-                    banca: parseFloat(banca), 
-                    payout: parseFloat(payout),
-                    estatutos: localEstatutos 
-                })
+                body: JSON.stringify({ banca: parseFloat(banca), payout: parseFloat(payout) })
             });
-            if(res.ok) alert("Configurações Salvas com Sucesso!");
-        } catch (e) { alert("Erro ao salvar configurações."); }
+            if(res.ok) alert("Banca Inicial e Payout Atualizados!");
+        } catch (e) {
+            alert("Erro ao salvar dados financeiros.");
+        }
     }
 
     async function mudarAtivo(cardId) {
@@ -230,35 +168,26 @@
             document.getElementById('conexao').innerText = "CONEXÃO ESTÁVEL - SERVIDOR ATIVO";
             document.getElementById('conexao').style.color = "var(--neon-green)";
 
+            // Dados Globais e Financeiros
             document.getElementById('g-direto').innerText = dados.global.winDireto;
             document.getElementById('g-gales').innerText = dados.global.winGales;
             document.getElementById('g-loss').innerText = dados.global.loss;
             document.getElementById('g-precisao').innerText = dados.global.precisao + "%";
+            
+            // Novos Displays Financeiros
             document.getElementById('display-banca').innerText = "R$ " + dados.global.banca;
             document.getElementById('display-lucro').innerText = "R$ " + dados.global.lucro;
             
+            // Cálculo de crescimento no front-end
             let bancaIni = parseFloat(document.getElementById('inpBanca').value);
             let cresc = ((parseFloat(dados.global.banca) / bancaIni - 1) * 100).toFixed(2);
             document.getElementById('display-crescimento').innerText = cresc + "%";
 
-            // Sincronizar Eficiência Individual
-            const r = dados.estrategias;
-            document.getElementById('stats-regra1-w').innerText = (r["REGRA 1"].d + r["REGRA 1"].g1 + r["REGRA 1"].g2) + "W";
-            document.getElementById('stats-regra1-l').innerText = r["REGRA 1"].l + "L";
-            
-            document.getElementById('stats-fluxosniper-w').innerText = (r["FLUXO SNIPER"].d + r["FLUXO SNIPER"].g1 + r["FLUXO SNIPER"].g2) + "W";
-            document.getElementById('stats-fluxosniper-l').innerText = r["FLUXO SNIPER"].l + "L";
-
-            document.getElementById('stats-zigzag-w').innerText = (r["ZIGZAG FRACTAL"].d + r["ZIGZAG FRACTAL"].g1 + r["ZIGZAG FRACTAL"].g2) + "W";
-            document.getElementById('stats-zigzag-l').innerText = r["ZIGZAG FRACTAL"].l + "L";
-
-            document.getElementById('stats-retra-w').innerText = (r["SNIPER (RETRAÇÃO)"].d + r["SNIPER (RETRAÇÃO)"].g1 + r["SNIPER (RETRAÇÃO)"].g2) + "W";
-            document.getElementById('stats-retra-l').innerText = r["SNIPER (RETRAÇÃO)"].l + "L";
-
             dados.ativos.forEach(ativo => {
                 const cardDiv = document.getElementById(`div-${ativo.cardId}`);
-                if (ativo.status === "OFF") cardDiv.classList.add('off');
+                if (ativo.status === "DESATIVADO") cardDiv.classList.add('off');
                 else cardDiv.classList.remove('off');
+
                 document.getElementById(`price-${ativo.cardId}`).innerText = ativo.preco;
                 document.getElementById(`status-${ativo.cardId}`).innerText = ativo.status;
                 document.getElementById(`therm-${ativo.cardId}`).style.width = ativo.forca + "%";
