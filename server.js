@@ -37,7 +37,7 @@ let rankingEstrategias = {
 
 let motores = {};
 
-// --- FUNÇÃO DE HORÁRIO (FUSO BRASÍLIA) ---
+// --- FUNÇÕES DE APOIO ---
 function getBrasiliaTime(date = new Date()) {
     return date.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 }
@@ -51,11 +51,32 @@ function enviarTelegram(msg, comBotao = true) {
     }).catch(e => {});
 }
 
+// --- MENSAGENS PADRONIZADAS (RESTAURADAS) ---
+
+function msgAlerta(m, est, dir) {
+    enviarTelegram(`🔍 *ALERTA DE SINAL*\n\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n🎯 Direção: ${dir}\n⏰ Entrada prevista: ${getBrasiliaTime()}`, false);
+}
+
+function msgEntrada(m, est, dir, fim) {
+    let placar = `🟢 ${stats.winDireto + stats.winG1 + stats.winG2}W | 🔴 ${stats.loss}L`;
+    enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n🎯 Direção: ${dir === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n🕒 Início: ${getBrasiliaTime()}\n🏁 Fim: ${getBrasiliaTime(fim)}\n📈 Placar: ${placar}`);
+}
+
+function msgGale(m, est, dir, nivel, fim) {
+    enviarTelegram(`🔄 *ENTRADA NO GALE ${nivel}*\n\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n🎯 Direção: ${dir === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n🕒 Início: ${getBrasiliaTime()}\n🏁 Fim: ${getBrasiliaTime(fim)}`);
+}
+
+function msgResultado(m, est, res, status) {
+    let emoji = res === 'WIN' ? '✅' : '❌';
+    let placar = `🟢 ${stats.winDireto + stats.winG1 + stats.winG2}W | 🔴 ${stats.loss}L`;
+    enviarTelegram(`${emoji} *RESULTADO: ${res === 'WIN' ? 'GREEN' : 'RED'}*\n\n🚦 Status: ${status}\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n📈 Placar: ${placar}`);
+}
+
 function msgEvolucaoBanca() {
     let lucro = fin.bancaAtual - fin.bancaInicial;
     let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
     let crescimento = ((fin.bancaAtual / fin.bancaInicial - 1) * 100).toFixed(2);
-    let msg = `📈 *EVOLUÇÃO DA BANCA*\n⏰ ${getBrasiliaTime()}\n\n✅ Operações Vitoriosas: ${totalWins}\n❌ Operações Perdidas: ${stats.loss}\n💰 Lucro Real: R$ ${lucro.toFixed(2)}\n📉 Prejuízos (Loss): R$ ${fin.perdaTotal.toFixed(2)}\n🚀 Crescimento: ${crescimento}%`;
+    let msg = `📈 *EVOLUÇÃO DA BANCA*\n\n✅ Operações Vitoriosas: ${totalWins}\n❌ Operações Perdidas: ${stats.loss}\n💰 Lucro Real: R$ ${lucro.toFixed(2)}\n📉 Prejuízos (Loss): R$ ${fin.perdaTotal.toFixed(2)}\n🚀 Crescimento: ${crescimento}%`;
     enviarTelegram(msg, false);
 }
 
@@ -89,37 +110,41 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             if (m.histCores.length > 5) m.histCores.shift();
             m.fechamentoAnt = m.velaAb; m.velaAb = p;
 
-            // \\ --- ESTRATEGIA: REGRA 1 ---
+            // \\ --- estrategia: REGRA 1 ---
             if (configEstrategias["REGRA 1"] && !m.op.ativa && podeOp && (m.forca >= 82 || m.forca <= 18)) {
                 m.sinalPendenteR1 = m.forca >= 82 ? "CALL" : "PUT";
                 m.buscandoTaxaR1 = true;
-                enviarTelegram(`🔍 *ALERTA*: REGRA 1 em ${m.nome}\n⏰ Hora: ${getBrasiliaTime()}`, false);
+                msgAlerta(m, "REGRA 1", m.sinalPendenteR1);
             }
         }
 
+        // --- dados da REGRA 1 ---
         if (m.buscandoTaxaR1 && !m.op.ativa && podeOp) {
             let diffV = Math.abs(m.fechamentoAnt - m.velaAb) || 0.0001;
             let confirmou = (m.sinalPendenteR1 === "CALL" && p <= (m.velaAb - (diffV * 0.2))) || (m.sinalPendenteR1 === "PUT" && p >= (m.velaAb + (diffV * 0.2)));
-            if (confirmou) { disparar(m, "REGRA 1", m.sinalPendenteR1, fin.bancaAtual * 0.01, p, 60); m.buscandoTaxaR1 = false; }
+            if (confirmou) { 
+                disparar(m, "REGRA 1", m.sinalPendenteR1, fin.bancaAtual * 0.01, p, 60); 
+                m.buscandoTaxaR1 = false; 
+            }
         }
 
         if (s === 30 && !m.op.ativa && podeOp && !m.buscandoTaxaR1) {
             let ult3 = m.histCores.slice(-3);
             
-            // \\ --- ESTRATEGIA: FLUXO SNIPER ---
+            // \\ --- estrategia: FLUXO SNIPER ---
             if (configEstrategias["FLUXO SNIPER"]) {
                 if (ult3.length === 3 && ult3.every(c => c === "V")) { disparar(m, "FLUXO SNIPER", "CALL", fin.bancaAtual * 0.01, p, 30); return; }
                 if (ult3.length === 3 && ult3.every(c => c === "R")) { disparar(m, "FLUXO SNIPER", "PUT", fin.bancaAtual * 0.01, p, 30); return; }
             }
 
-            // \\ --- ESTRATEGIA: ZIGZAG FRACTAL ---
+            // \\ --- estrategia: ZIGZAG FRACTAL ---
             if (configEstrategias["ZIGZAG FRACTAL"]) {
                 if (m.forca > 80) { disparar(m, "ZIGZAG FRACTAL", "PUT", fin.bancaAtual * 0.01, p, 30); return; }
                 if (m.forca < 20) { disparar(m, "ZIGZAG FRACTAL", "CALL", fin.bancaAtual * 0.01, p, 30); return; }
             }
         }
 
-        // \\ --- ESTRATEGIA: SNIPER (RETRAÇÃO) ---
+        // \\ --- estrategia: SNIPER (RETRAÇÃO) ---
         if (configEstrategias["SNIPER (RETRAÇÃO)"] && s === 45 && !m.op.ativa && podeOp) {
             let diffP = (p - m.velaAb) / m.velaAb * 1000;
             if (Math.abs(diffP) > 0.8) disparar(m, "SNIPER (RETRAÇÃO)", diffP > 0 ? "PUT" : "CALL", fin.bancaAtual * 0.01, p, 15);
@@ -132,17 +157,23 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 let est = m.op.est;
                 if (ganhou) {
                     let lucroOp = m.op.val * fin.payout; fin.bancaAtual += (m.op.val + lucroOp);
-                    if(m.op.g===0) rankingEstrategias[est].d++; else if(m.op.g===1) rankingEstrategias[est].g1++; else rankingEstrategias[est].g2++;
-                    stats.winDireto++; rankingEstrategias[est].t++; stats.totalAnalises++;
-                    enviarTelegram(`✅ *WIN* - ${est} em ${m.nome}\n⏰ Hora: ${getBrasiliaTime()}`);
+                    let status = m.op.g === 0 ? "DIRETO" : `GALE ${m.op.g}`;
+                    if(m.op.g===0) { stats.winDireto++; rankingEstrategias[est].d++; }
+                    else if(m.op.g===1) { stats.winG1++; rankingEstrategias[est].g1++; }
+                    else { stats.winG2++; rankingEstrategias[est].g2++; }
+                    stats.totalAnalises++; rankingEstrategias[est].t++;
+                    msgResultado(m, est, 'WIN', status);
                     msgEvolucaoBanca();
                     m.op.ativa = false;
                 } else if (m.op.g < (est === "REGRA 1" ? 2 : 1)) {
-                    m.op.g++; m.op.val *= 2; fin.bancaAtual -= m.op.val; m.op.t = 60; m.op.pre = p;
+                    m.op.g++; 
+                    m.op.val *= 2; fin.bancaAtual -= m.op.val;
+                    m.op.t = 60; m.op.pre = p;
+                    msgGale(m, est, m.op.dir, m.op.g, new Date(Date.now() + 60000));
                 } else {
-                    stats.loss++; rankingEstrategias[est].l++; rankingEstrategias[est].t++; stats.totalAnalises++;
+                    stats.loss++; stats.totalAnalises++; rankingEstrategias[est].l++; rankingEstrategias[est].t++;
                     fin.perdaTotal += m.op.val;
-                    enviarTelegram(`❌ *LOSS* - ${est} em ${m.nome}\n⏰ Hora: ${getBrasiliaTime()}`);
+                    msgResultado(m, est, 'LOSS', `LOSS GALE ${m.op.g}`);
                     m.op.ativa = false;
                 }
             }
@@ -154,7 +185,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 function disparar(m, est, dir, val, pre, t) {
     fin.bancaAtual -= val;
     m.op = { ativa: true, est: est, pre: pre, t: t, dir: dir, g: 0, val: val };
-    enviarTelegram(`🚀 *ENTRADA*: ${est} em ${m.nome}\n⏰ Início: ${getBrasiliaTime()}`);
+    msgEntrada(m, est, dir, new Date(Date.now() + t * 1000));
 }
 
 app.post('/config-financeira', (req, res) => {
@@ -165,8 +196,13 @@ app.post('/config-financeira', (req, res) => {
 });
 
 app.get('/status', (req, res) => {
+    let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
     res.json({
-        global: { winDireto: stats.winDireto, winGales: 0, loss: stats.loss, precisao: "0", banca: fin.bancaAtual.toFixed(2), lucro: (fin.bancaAtual - fin.bancaInicial).toFixed(2) },
+        global: { 
+            winDireto: stats.winDireto, winGales: (stats.winG1 + stats.winG2), loss: stats.loss, 
+            precisao: stats.totalAnalises > 0 ? ((totalWins / stats.totalAnalises) * 100).toFixed(1) : "0.0",
+            banca: fin.bancaAtual.toFixed(2), lucro: (fin.bancaAtual - fin.bancaInicial).toFixed(2) 
+        },
         estrategias: rankingEstrategias,
         configEstrategias: configEstrategias,
         ativos: Object.keys(motores).map(id => ({ cardId: id, nome: motores[id].nome, preco: motores[id].preco, forca: motores[id].forca, status: motores[id].status }))
