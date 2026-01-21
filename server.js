@@ -1,3 +1,6 @@
+👉Server.js:
+
+
 const WebSocket = require('ws');
 const fetch = require('node-fetch');
 const express = require('express');
@@ -230,3 +233,4 @@ app.get('/status', (req, res) => {
 
 app.post('/mudar', (req, res) => { iniciarMotor(req.body.cardId, req.body.ativoId, req.body.nomeAtivo); res.json({ success: true }); });
 app.listen(PORT, () => console.log(`Super Central ON`));
+
