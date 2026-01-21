@@ -16,7 +16,7 @@ const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI";
 const TG_CHAT_ID = "-1003355965894"; 
 const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
 
-// --- CONTROLE DE ATIVAÇÃO DAS ESTRATÉGIAS ---
+// --- CONTROLE DE ATIVAÇÃO ---
 let configEstrategias = {
     "REGRA 1": true,
     "FLUXO SNIPER": true,
@@ -24,9 +24,9 @@ let configEstrategias = {
     "SNIPER (RETRAÇÃO)": true
 };
 
-// --- BANCA E ESTATÍSTICAS DETALHADAS ---
+// --- BANCA E ESTATÍSTICAS ---
 let fin = { bancaInicial: 5000, bancaAtual: 5000, payout: 0.95, perdaTotal: 0 };
-let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0, totalG1: 0, totalG2: 0 };
+let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0 };
 
 let rankingEstrategias = {
     "REGRA 1": { d: 0, g1: 0, g2: 0, l: 0, t: 0 },
@@ -35,9 +35,9 @@ let rankingEstrategias = {
     "SNIPER (RETRAÇÃO)": { d: 0, g1: 0, g2: 0, l: 0, t: 0 }
 };
 
-let rankingAtivos = {}; 
 let motores = {};
 
+// --- FUNÇÕES DE APOIO ---
 function getBrasiliaTime(date = new Date()) {
     return date.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 }
@@ -51,28 +51,8 @@ function enviarTelegram(msg, comBotao = true) {
     }).catch(e => {});
 }
 
-function msgEvolucaoBanca() {
-    let lucro = fin.bancaAtual - fin.bancaInicial;
-    let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
-    let crescimento = ((fin.bancaAtual / fin.bancaInicial - 1) * 100).toFixed(2);
+// --- MENSAGENS PADRONIZADAS (RESTAURADAS) ---
 
-    let msg = `📈 *EVOLUÇÃO DA BANCA*\n\n`;
-    msg += `✅ Operações Vitoriosas: ${totalWins}\n`;
-    msg += `❌ Operações Perdidas: ${stats.loss}\n`;
-    msg += `💰 Lucro Real: R$ ${lucro.toFixed(2)}\n`;
-    msg += `📉 Prejuízos (Loss): R$ ${fin.perdaTotal.toFixed(2)}\n`;
-    msg += `🚀 Crescimento: ${crescimento}%`;
-    
-    enviarTelegram(msg, false);
-}
-
-function updateAtivo(nome, tipo) {
-    if (!rankingAtivos[nome]) rankingAtivos[nome] = { win: 0, loss: 0 };
-    if (tipo === 'win') rankingAtivos[nome].win++;
-    else rankingAtivos[nome].loss++;
-}
-
-// --- MENSAGENS PADRONIZADAS ---
 function msgAlerta(m, est, dir) {
     enviarTelegram(`🔍 *ALERTA DE SINAL*\n\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n🎯 Direção: ${dir}\n⏰ Entrada prevista: ${getBrasiliaTime()}`, false);
 }
@@ -90,6 +70,14 @@ function msgResultado(m, est, res, status) {
     let emoji = res === 'WIN' ? '✅' : '❌';
     let placar = `🟢 ${stats.winDireto + stats.winG1 + stats.winG2}W | 🔴 ${stats.loss}L`;
     enviarTelegram(`${emoji} *RESULTADO: ${res === 'WIN' ? 'GREEN' : 'RED'}*\n\n🚦 Status: ${status}\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n📈 Placar: ${placar}`);
+}
+
+function msgEvolucaoBanca() {
+    let lucro = fin.bancaAtual - fin.bancaInicial;
+    let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
+    let crescimento = ((fin.bancaAtual / fin.bancaInicial - 1) * 100).toFixed(2);
+    let msg = `📈 *EVOLUÇÃO DA BANCA*\n\n✅ Operações Vitoriosas: ${totalWins}\n❌ Operações Perdidas: ${stats.loss}\n💰 Lucro Real: R$ ${lucro.toFixed(2)}\n📉 Prejuízos (Loss): R$ ${fin.perdaTotal.toFixed(2)}\n🚀 Crescimento: ${crescimento}%`;
+    enviarTelegram(msg, false);
 }
 
 // --- MOTOR DE OPERAÇÕES ---
@@ -120,10 +108,9 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
         if (s === 0) { 
             if (m.velaAb > 0) m.histCores.push(p > m.velaAb ? "V" : "R");
             if (m.histCores.length > 5) m.histCores.shift();
-            m.fechamentoAnt = m.velaAb;
-            m.velaAb = p;
+            m.fechamentoAnt = m.velaAb; m.velaAb = p;
 
-            // --- ESTRATEGIA: REGRA 1 ---
+            // \\ --- estrategia: REGRA 1 ---
             if (configEstrategias["REGRA 1"] && !m.op.ativa && podeOp && (m.forca >= 82 || m.forca <= 18)) {
                 m.sinalPendenteR1 = m.forca >= 82 ? "CALL" : "PUT";
                 m.buscandoTaxaR1 = true;
@@ -131,42 +118,33 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             }
         }
 
-        // --- DADOS DA REGRA 1 (CONFIRMAÇÃO TAXA) ---
+        // --- dados da REGRA 1 ---
         if (m.buscandoTaxaR1 && !m.op.ativa && podeOp) {
             let diffV = Math.abs(m.fechamentoAnt - m.velaAb) || 0.0001;
-            let confirmou = (m.sinalPendenteR1 === "CALL" && p <= (m.velaAb - (diffV * 0.2))) || 
-                            (m.sinalPendenteR1 === "PUT" && p >= (m.velaAb + (diffV * 0.2)));
-            if (confirmou) {
-                disparar(m, "REGRA 1", m.sinalPendenteR1, fin.bancaAtual * 0.01, p, 60);
-                m.buscandoTaxaR1 = false;
+            let confirmou = (m.sinalPendenteR1 === "CALL" && p <= (m.velaAb - (diffV * 0.2))) || (m.sinalPendenteR1 === "PUT" && p >= (m.velaAb + (diffV * 0.2)));
+            if (confirmou) { 
+                disparar(m, "REGRA 1", m.sinalPendenteR1, fin.bancaAtual * 0.01, p, 60); 
+                m.buscandoTaxaR1 = false; 
             }
         }
 
         if (s === 30 && !m.op.ativa && podeOp && !m.buscandoTaxaR1) {
             let ult3 = m.histCores.slice(-3);
             
-            // --- ESTRATEGIA: FLUXO SNIPER ---
+            // \\ --- estrategia: FLUXO SNIPER ---
             if (configEstrategias["FLUXO SNIPER"]) {
-                if (ult3.length === 3 && ult3.every(c => c === "V")) {
-                    disparar(m, "FLUXO SNIPER", "CALL", fin.bancaAtual * 0.01, p, 30);
-                    return;
-                } else if (ult3.length === 3 && ult3.every(c => c === "R")) {
-                    disparar(m, "FLUXO SNIPER", "PUT", fin.bancaAtual * 0.01, p, 30);
-                    return;
-                }
+                if (ult3.length === 3 && ult3.every(c => c === "V")) { disparar(m, "FLUXO SNIPER", "CALL", fin.bancaAtual * 0.01, p, 30); return; }
+                if (ult3.length === 3 && ult3.every(c => c === "R")) { disparar(m, "FLUXO SNIPER", "PUT", fin.bancaAtual * 0.01, p, 30); return; }
             }
 
-            // --- ESTRATEGIA: ZIGZAG FRACTAL ---
+            // \\ --- estrategia: ZIGZAG FRACTAL ---
             if (configEstrategias["ZIGZAG FRACTAL"]) {
-                if (m.forca > 80) {
-                    disparar(m, "ZIGZAG FRACTAL", "PUT", fin.bancaAtual * 0.01, p, 30);
-                } else if (m.forca < 20) {
-                    disparar(m, "ZIGZAG FRACTAL", "CALL", fin.bancaAtual * 0.01, p, 30);
-                }
+                if (m.forca > 80) { disparar(m, "ZIGZAG FRACTAL", "PUT", fin.bancaAtual * 0.01, p, 30); return; }
+                if (m.forca < 20) { disparar(m, "ZIGZAG FRACTAL", "CALL", fin.bancaAtual * 0.01, p, 30); return; }
             }
         }
 
-        // --- ESTRATEGIA: SNIPER (RETRAÇÃO) ---
+        // \\ --- estrategia: SNIPER (RETRAÇÃO) ---
         if (configEstrategias["SNIPER (RETRAÇÃO)"] && s === 45 && !m.op.ativa && podeOp) {
             let diffP = (p - m.velaAb) / m.velaAb * 1000;
             if (Math.abs(diffP) > 0.8) disparar(m, "SNIPER (RETRAÇÃO)", diffP > 0 ? "PUT" : "CALL", fin.bancaAtual * 0.01, p, 15);
@@ -185,12 +163,10 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                     else { stats.winG2++; rankingEstrategias[est].g2++; }
                     stats.totalAnalises++; rankingEstrategias[est].t++;
                     msgResultado(m, est, 'WIN', status);
-                    updateAtivo(m.nome, 'win');
                     msgEvolucaoBanca();
                     m.op.ativa = false;
                 } else if (m.op.g < (est === "REGRA 1" ? 2 : 1)) {
                     m.op.g++; 
-                    if(m.op.g === 1) stats.totalG1++; else stats.totalG2++;
                     m.op.val *= 2; fin.bancaAtual -= m.op.val;
                     m.op.t = 60; m.op.pre = p;
                     msgGale(m, est, m.op.dir, m.op.g, new Date(Date.now() + 60000));
@@ -198,7 +174,6 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                     stats.loss++; stats.totalAnalises++; rankingEstrategias[est].l++; rankingEstrategias[est].t++;
                     fin.perdaTotal += m.op.val;
                     msgResultado(m, est, 'LOSS', `LOSS GALE ${m.op.g}`);
-                    updateAtivo(m.nome, 'loss');
                     m.op.ativa = false;
                 }
             }
@@ -213,41 +188,24 @@ function disparar(m, est, dir, val, pre, t) {
     msgEntrada(m, est, dir, new Date(Date.now() + t * 1000));
 }
 
-// --- ROTA DE CONFIGURAÇÃO (SALVA TUDO: BANCA E BOTÕES) ---
 app.post('/config-financeira', (req, res) => {
-    if (req.body.banca !== undefined) {
-        fin.bancaInicial = parseFloat(req.body.banca);
-        fin.bancaAtual = parseFloat(req.body.banca);
-    }
-    if (req.body.payout !== undefined) {
-        fin.payout = parseFloat(req.body.payout) / 100;
-    }
-    if (req.body.estatutos !== undefined) {
-        configEstrategias = req.body.estatutos;
-    }
-    res.json({ success: true, config: configEstrategias });
+    if (req.body.banca) { fin.bancaInicial = parseFloat(req.body.banca); fin.bancaAtual = parseFloat(req.body.banca); }
+    if (req.body.payout) fin.payout = parseFloat(req.body.payout) / 100;
+    if (req.body.estatutos) configEstrategias = req.body.estatutos;
+    res.json({ success: true });
 });
 
 app.get('/status', (req, res) => {
     let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
     res.json({
         global: { 
-            winDireto: stats.winDireto, 
-            winGales: (stats.winG1 + stats.winG2), 
-            loss: stats.loss, 
+            winDireto: stats.winDireto, winGales: (stats.winG1 + stats.winG2), loss: stats.loss, 
             precisao: stats.totalAnalises > 0 ? ((totalWins / stats.totalAnalises) * 100).toFixed(1) : "0.0",
-            banca: fin.bancaAtual.toFixed(2), 
-            lucro: (fin.bancaAtual - fin.bancaInicial).toFixed(2) 
+            banca: fin.bancaAtual.toFixed(2), lucro: (fin.bancaAtual - fin.bancaInicial).toFixed(2) 
         },
         estrategias: rankingEstrategias,
         configEstrategias: configEstrategias,
-        ativos: Object.keys(motores).map(id => ({ 
-            cardId: id, 
-            nome: motores[id].nome, 
-            preco: motores[id].preco, 
-            forca: motores[id].forca, 
-            status: motores[id].status 
-        }))
+        ativos: Object.keys(motores).map(id => ({ cardId: id, nome: motores[id].nome, preco: motores[id].preco, forca: motores[id].forca, status: motores[id].status }))
     });
 });
 
