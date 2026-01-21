@@ -10,24 +10,15 @@ app.use(cors());
 const PORT = process.env.PORT || 3000; 
 
 // --- CONFIGURAÇÕES ---
-const HORA_INICIO = 8;  
+const HORA_INICIO = 0;  // Alterado para 0 para testes, volte para 8 depois
 const HORA_FIM = 23;    
 const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI"; 
 const TG_CHAT_ID = "-1003355965894"; 
 const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
 
-// --- CONTROLE DE ATIVAÇÃO ---
-let configEstrategias = {
-    "REGRA 1": true,
-    "FLUXO SNIPER": true,
-    "ZIGZAG FRACTAL": true,
-    "SNIPER (RETRAÇÃO)": true
-};
-
-// --- BANCA E ESTATÍSTICAS ---
+let configEstrategias = { "REGRA 1": true, "FLUXO SNIPER": true, "ZIGZAG FRACTAL": true, "SNIPER (RETRAÇÃO)": true };
 let fin = { bancaInicial: 5000, bancaAtual: 5000, payout: 0.95, perdaTotal: 0 };
 let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0 };
-
 let rankingEstrategias = {
     "REGRA 1": { d: 0, g1: 0, g2: 0, l: 0, t: 0 },
     "FLUXO SNIPER": { d: 0, g1: 0, g2: 0, l: 0, t: 0 },
@@ -38,8 +29,8 @@ let rankingEstrategias = {
 let motores = {};
 
 // --- FUNÇÕES DE APOIO ---
-function getBrasiliaTime(date = new Date()) {
-    return date.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+function getBrasiliaTime() {
+    return new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 }
 
 function enviarTelegram(msg, comBotao = true) {
@@ -48,41 +39,24 @@ function enviarTelegram(msg, comBotao = true) {
     fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-    }).catch(e => {});
+    }).catch(e => console.log("Erro TG:", e.message));
 }
 
-// --- MENSAGENS PADRONIZADAS (RESTAURADAS) ---
-
-function msgAlerta(m, est, dir) {
-    enviarTelegram(`🔍 *ALERTA DE SINAL*\n\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n🎯 Direção: ${dir}\n⏰ Entrada prevista: ${getBrasiliaTime()}`, false);
-}
-
-function msgEntrada(m, est, dir, fim) {
+// --- MENSAGENS ---
+function msgAlerta(m, est, dir) { enviarTelegram(`🔍 *ALERTA DE SINAL*\n\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n🎯 Direção: ${dir}\n⏰ Previsto: ${getBrasiliaTime()}`, false); }
+function msgEntrada(m, est, dir, t) { 
     let placar = `🟢 ${stats.winDireto + stats.winG1 + stats.winG2}W | 🔴 ${stats.loss}L`;
-    enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n🎯 Direção: ${dir === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n🕒 Início: ${getBrasiliaTime()}\n🏁 Fim: ${getBrasiliaTime(fim)}\n📈 Placar: ${placar}`);
+    enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n🎯 Direção: ${dir === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n🕒 Placar: ${placar}`); 
 }
-
-function msgGale(m, est, dir, nivel, fim) {
-    enviarTelegram(`🔄 *ENTRADA NO GALE ${nivel}*\n\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n🎯 Direção: ${dir === "CALL" ? "COMPRA 🟢" : "VENDA 🔴"}\n🕒 Início: ${getBrasiliaTime()}\n🏁 Fim: ${getBrasiliaTime(fim)}`);
-}
-
 function msgResultado(m, est, res, status) {
     let emoji = res === 'WIN' ? '✅' : '❌';
     let placar = `🟢 ${stats.winDireto + stats.winG1 + stats.winG2}W | 🔴 ${stats.loss}L`;
-    enviarTelegram(`${emoji} *RESULTADO: ${res === 'WIN' ? 'GREEN' : 'RED'}*\n\n🚦 Status: ${status}\n📊 Ativo: ${m.nome}\n⚡ Estratégia: ${est}\n📈 Placar: ${placar}`);
+    enviarTelegram(`${emoji} *RESULTADO: ${res === 'WIN' ? 'GREEN' : 'RED'}*\n\n🚦 Status: ${status}\n📊 Ativo: ${m.nome}\n📈 Placar: ${placar}`);
 }
 
-function msgEvolucaoBanca() {
-    let lucro = fin.bancaAtual - fin.bancaInicial;
-    let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
-    let crescimento = ((fin.bancaAtual / fin.bancaInicial - 1) * 100).toFixed(2);
-    let msg = `📈 *EVOLUÇÃO DA BANCA*\n\n✅ Operações Vitoriosas: ${totalWins}\n❌ Operações Perdidas: ${stats.loss}\n💰 Lucro Real: R$ ${lucro.toFixed(2)}\n📉 Prejuízos (Loss): R$ ${fin.perdaTotal.toFixed(2)}\n🚀 Crescimento: ${crescimento}%`;
-    enviarTelegram(msg, false);
-}
-
-// --- MOTOR DE OPERAÇÕES ---
+// --- MOTOR ---
 function iniciarMotor(cardId, ativoId, nomeAtivo) {
-    if (motores[cardId]?.ws) motores[cardId].ws.close();
+    if (motores[cardId]?.ws) motores[cardId].ws.terminate();
     if (ativoId === "OFF") return motores[cardId] = { nome: "OFF", status: "OFF", preco: "---", forca: 50 };
 
     let m = {
@@ -95,22 +69,25 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
     m.ws.on('open', () => m.ws.send(JSON.stringify({ ticks: ativoId })));
     m.ws.on('message', (data) => {
-        const res = JSON.parse(data);
+        // CORREÇÃO CRÍTICA: Converter Buffer para String antes do JSON.parse
+        const res = JSON.parse(data.toString());
         if (!res.tick) return;
+        
         const p = res.tick.quote;
-        const s = new Date().getSeconds();
-        const h = parseInt(new Date().toLocaleTimeString('pt-BR', {timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false}));
+        const agora = new Date();
+        const s = agora.getSeconds();
+        const h = parseInt(agora.toLocaleTimeString('pt-BR', {timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false}));
+        
         m.preco = p.toFixed(5);
         const podeOp = h >= HORA_INICIO && h < HORA_FIM;
 
         if (m.velaAb > 0) m.forca = Math.min(98, Math.max(2, 50 + ((p - m.velaAb) / (m.velaAb * 0.0002) * 20)));
 
-        if (s === 0) { 
+        if (s === 0 && m.velaAb !== p) { 
             if (m.velaAb > 0) m.histCores.push(p > m.velaAb ? "V" : "R");
             if (m.histCores.length > 5) m.histCores.shift();
             m.fechamentoAnt = m.velaAb; m.velaAb = p;
 
-            // \\ --- estrategia: REGRA 1 ---
             if (configEstrategias["REGRA 1"] && !m.op.ativa && podeOp && (m.forca >= 82 || m.forca <= 18)) {
                 m.sinalPendenteR1 = m.forca >= 82 ? "CALL" : "PUT";
                 m.buscandoTaxaR1 = true;
@@ -118,7 +95,6 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             }
         }
 
-        // --- dados da REGRA 1 ---
         if (m.buscandoTaxaR1 && !m.op.ativa && podeOp) {
             let diffV = Math.abs(m.fechamentoAnt - m.velaAb) || 0.0001;
             let confirmou = (m.sinalPendenteR1 === "CALL" && p <= (m.velaAb - (diffV * 0.2))) || (m.sinalPendenteR1 === "PUT" && p >= (m.velaAb + (diffV * 0.2)));
@@ -130,24 +106,12 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
         if (s === 30 && !m.op.ativa && podeOp && !m.buscandoTaxaR1) {
             let ult3 = m.histCores.slice(-3);
-            
-            // \\ --- estrategia: FLUXO SNIPER ---
-            if (configEstrategias["FLUXO SNIPER"]) {
-                if (ult3.length === 3 && ult3.every(c => c === "V")) { disparar(m, "FLUXO SNIPER", "CALL", fin.bancaAtual * 0.01, p, 30); return; }
-                if (ult3.length === 3 && ult3.every(c => c === "R")) { disparar(m, "FLUXO SNIPER", "PUT", fin.bancaAtual * 0.01, p, 30); return; }
+            if (configEstrategias["FLUXO SNIPER"] && ult3.length === 3 && ult3.every(c => c === (ult3[0]))) {
+                disparar(m, "FLUXO SNIPER", ult3[0] === "V" ? "CALL" : "PUT", fin.bancaAtual * 0.01, p, 30);
+            } else if (configEstrategias["ZIGZAG FRACTAL"]) {
+                if (m.forca > 80) disparar(m, "ZIGZAG FRACTAL", "PUT", fin.bancaAtual * 0.01, p, 30);
+                else if (m.forca < 20) disparar(m, "ZIGZAG FRACTAL", "CALL", fin.bancaAtual * 0.01, p, 30);
             }
-
-            // \\ --- estrategia: ZIGZAG FRACTAL ---
-            if (configEstrategias["ZIGZAG FRACTAL"]) {
-                if (m.forca > 80) { disparar(m, "ZIGZAG FRACTAL", "PUT", fin.bancaAtual * 0.01, p, 30); return; }
-                if (m.forca < 20) { disparar(m, "ZIGZAG FRACTAL", "CALL", fin.bancaAtual * 0.01, p, 30); return; }
-            }
-        }
-
-        // \\ --- estrategia: SNIPER (RETRAÇÃO) ---
-        if (configEstrategias["SNIPER (RETRAÇÃO)"] && s === 45 && !m.op.ativa && podeOp) {
-            let diffP = (p - m.velaAb) / m.velaAb * 1000;
-            if (Math.abs(diffP) > 0.8) disparar(m, "SNIPER (RETRAÇÃO)", diffP > 0 ? "PUT" : "CALL", fin.bancaAtual * 0.01, p, 15);
         }
 
         if (m.op.ativa) {
@@ -157,21 +121,17 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 let est = m.op.est;
                 if (ganhou) {
                     let lucroOp = m.op.val * fin.payout; fin.bancaAtual += (m.op.val + lucroOp);
-                    let status = m.op.g === 0 ? "DIRETO" : `GALE ${m.op.g}`;
                     if(m.op.g===0) { stats.winDireto++; rankingEstrategias[est].d++; }
                     else if(m.op.g===1) { stats.winG1++; rankingEstrategias[est].g1++; }
                     else { stats.winG2++; rankingEstrategias[est].g2++; }
                     stats.totalAnalises++; rankingEstrategias[est].t++;
-                    msgResultado(m, est, 'WIN', status);
-                    msgEvolucaoBanca();
+                    msgResultado(m, est, 'WIN', m.op.g === 0 ? "DIRETO" : `GALE ${m.op.g}`);
                     m.op.ativa = false;
                 } else if (m.op.g < (est === "REGRA 1" ? 2 : 1)) {
-                    m.op.g++; 
-                    m.op.val *= 2; fin.bancaAtual -= m.op.val;
+                    m.op.g++; m.op.val *= 2; fin.bancaAtual -= m.op.val;
                     m.op.t = 60; m.op.pre = p;
-                    msgGale(m, est, m.op.dir, m.op.g, new Date(Date.now() + 60000));
                 } else {
-                    stats.loss++; stats.totalAnalises++; rankingEstrategias[est].l++; rankingEstrategias[est].t++;
+                    stats.loss++; stats.totalAnalises++; rankingEstrategias[est].l++;
                     fin.perdaTotal += m.op.val;
                     msgResultado(m, est, 'LOSS', `LOSS GALE ${m.op.g}`);
                     m.op.ativa = false;
@@ -185,15 +145,8 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 function disparar(m, est, dir, val, pre, t) {
     fin.bancaAtual -= val;
     m.op = { ativa: true, est: est, pre: pre, t: t, dir: dir, g: 0, val: val };
-    msgEntrada(m, est, dir, new Date(Date.now() + t * 1000));
+    msgEntrada(m, est, dir, t);
 }
-
-app.post('/config-financeira', (req, res) => {
-    if (req.body.banca) { fin.bancaInicial = parseFloat(req.body.banca); fin.bancaAtual = parseFloat(req.body.banca); }
-    if (req.body.payout) fin.payout = parseFloat(req.body.payout) / 100;
-    if (req.body.estatutos) configEstrategias = req.body.estatutos;
-    res.json({ success: true });
-});
 
 app.get('/status', (req, res) => {
     let totalWins = stats.winDireto + stats.winG1 + stats.winG2;
@@ -204,10 +157,15 @@ app.get('/status', (req, res) => {
             banca: fin.bancaAtual.toFixed(2), lucro: (fin.bancaAtual - fin.bancaInicial).toFixed(2) 
         },
         estrategias: rankingEstrategias,
-        configEstrategias: configEstrategias,
         ativos: Object.keys(motores).map(id => ({ cardId: id, nome: motores[id].nome, preco: motores[id].preco, forca: motores[id].forca, status: motores[id].status }))
     });
 });
 
 app.post('/mudar', (req, res) => { iniciarMotor(req.body.cardId, req.body.ativoId, req.body.nomeAtivo); res.json({ success: true }); });
-app.listen(PORT, () => console.log(`Super Central ON`));
+app.post('/config-financeira', (req, res) => {
+    if (req.body.banca) { fin.bancaInicial = req.body.banca; fin.bancaAtual = req.body.banca; }
+    if (req.body.estatutos) configEstrategias = req.body.estatutos;
+    res.json({ success: true });
+});
+
+app.listen(PORT, () => console.log(`Servidor rodando porta ${PORT}`));
