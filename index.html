@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KCM - Controle Central</title>
+    <title>KCM - Multi Estratégia</title>
     <style>
         :root { 
             --neon-blue: #1e90ff; --neon-green: #00ff88; --neon-red: #ff3355; 
@@ -13,41 +13,56 @@
         .logo { font-size: 22px; font-weight: 900; color: #fff; margin: 10px 0; }
         .logo span { color: var(--neon-blue); font-style: italic; }
         
-        .painel-financeiro { background: #111418; border: 2px solid var(--neon-green); border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; margin-bottom: 10px; }
-        .fin-row { display: flex; gap: 10px; justify-content: space-between; align-items: flex-end; margin-bottom: 15px; }
-        .fin-input-group { flex: 1; }
-        .fin-input-group label { font-size: 10px; color: #888; display: block; margin-bottom: 4px; }
-        .fin-input { width: 90%; background: #000; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 5px; }
-        
-        .btn-salvar { background: var(--neon-green); color: #000; border: none; padding: 10px; border-radius: 5px; font-weight: 900; cursor: pointer; width: 100%; margin-top: 10px; }
-        
-        .painel-estrat { background: #111418; border: 1px solid #333; border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-        .estrat-card { background: #000; padding: 10px; border-radius: 10px; border: 1px solid #222; text-align: center; }
-        .btn-toggle { padding: 5px; font-size: 10px; font-weight: bold; border-radius: 5px; border: none; cursor: pointer; width: 100%; }
-        .btn-on { background: var(--neon-green); color: #000; }
-        .btn-off { background: var(--neon-red); color: #fff; }
+        .srv-status { font-size: 9px; padding: 4px 12px; border-radius: 20px; background: #000; border: 1px solid var(--neon-green); color: var(--neon-green); margin-bottom: 15px; text-transform: uppercase; }
 
-        .srv-status { font-size: 10px; padding: 5px 15px; border-radius: 20px; background: #111; margin-bottom: 10px; border: 1px solid #333; }
-        .grid-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; max-width: 600px; }
-        .card { background: #111418; border-radius: 20px; padding: 12px; border: 1px solid #1e2228; text-align: center; transition: 0.3s; }
-        .card.off { opacity: 0.4; }
-        .price-val { font-family: monospace; color: var(--gale); font-size: 14px; margin: 10px 0; }
-        .select-ativo { background: #0d0f12; color: #fff; border: 1px solid #444; font-size: 11px; width: 100%; padding: 5px; border-radius: 5px; }
+        /* PAINEL FINANCEIRO */
+        .painel-financeiro { background: #111418; border: 2px solid var(--neon-green); border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; margin-bottom: 15px; }
+        .fin-row { display: flex; gap: 10px; justify-content: space-between; margin-bottom: 15px; }
+        .fin-input-group { flex: 1; }
+        .fin-input-group label { font-size: 9px; color: #888; display: block; margin-bottom: 4px; }
+        .fin-input { width: 90%; background: #000; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 5px; font-weight: bold; }
         
-        /* Termômetro de Força */
-        .thermometer-wrap { width: 100%; height: 8px; background: #222; border-radius: 4px; margin: 8px 0; overflow: hidden; }
-        .thermometer-fill { height: 100%; width: 50%; background: linear-gradient(90deg, red, yellow, green); transition: 0.5s; }
+        .display-stats { display: flex; justify-content: space-around; text-align: center; margin-top: 10px; }
+        .display-stats div { flex: 1; }
+        .display-stats span { font-size: 8px; color: #888; display: block; }
+        .display-stats b { font-size: 14px; }
+
+        /* PAINEL ESTRATÉGIAS */
+        .painel-central { background: #111418; border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; border: 1px solid #222; }
+        .grid-estrat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .estrat-card { background: #000; padding: 10px; border-radius: 10px; border: 1px solid #222; text-align: center; }
+        .estrat-name { font-size: 9px; color: #888; margin-bottom: 5px; }
+        .btn-toggle { background: var(--neon-green); color: #000; padding: 6px; font-size: 10px; font-weight: bold; border-radius: 5px; border: none; width: 100%; cursor: pointer; }
+        .btn-off { background: var(--neon-red); color: #fff; }
+        .estrat-results { font-size: 9px; margin-top: 5px; display: flex; justify-content: space-around; }
+
+        .btn-salvar-grande { background: var(--neon-green); color: #000; border: none; padding: 12px; border-radius: 8px; font-weight: 900; cursor: pointer; width: 100%; margin: 15px 0; font-size: 12px; }
+
+        /* BARRA AZUL */
+        .barra-global { background: #05070a; border: 1px solid var(--royal-blue); border-radius: 10px; width: 100%; padding: 10px 0; display: flex; justify-content: space-around; margin-bottom: 20px; }
+        .stat-item { text-align: center; }
+        .stat-item span { font-size: 8px; color: #888; }
+        .stat-item b { display: block; font-size: 14px; }
+
+        /* MONITORES */
+        .grid-monitores { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 600px; }
+        .card { background: #080a0d; border-radius: 15px; padding: 12px; border: 1px solid #1e2228; text-align: center; }
+        .thermometer-wrap { width: 100%; height: 6px; background: #222; border-radius: 3px; margin: 10px 0; overflow: hidden; }
+        .thermometer-fill { height: 100%; width: 50%; background: linear-gradient(90deg, #ff3355, #f0b90b, #00ff88); transition: 0.5s; }
+        .status-box { background: #000; padding: 6px; border-radius: 5px; margin-bottom: 8px; font-size: 9px; color: var(--neon-blue); font-weight: bold; border: 1px solid #222; }
+        .price { color: var(--gale); font-family: monospace; font-size: 11px; margin-bottom: 8px; }
+        .select-ativo { background: #000; color: #fff; border: 1px solid #444; font-size: 10px; width: 100%; padding: 5px; border-radius: 4px; }
     </style>
 </head>
 <body>
 
-    <div class="logo">K.C<span>📈</span>M MULTI-CONTROL</div>
-    <div id="conexao" class="srv-status">SINCRONIZANDO...</div>
+    <div class="logo">K.C<span>📈</span>M MULTI/ESTRATEGIA-CONTROL</div>
+    <div id="conexao" class="srv-status">BOT INTEGRADO - SISTEMA ATIVO</div>
 
     <div class="painel-financeiro">
         <div class="fin-row">
             <div class="fin-input-group">
-                <label>BANCA (R$)</label>
+                <label>BANCA INICIAL (R$)</label>
                 <input type="number" id="inpBanca" class="fin-input" value="5000">
             </div>
             <div class="fin-input-group">
@@ -55,68 +70,102 @@
                 <input type="number" id="inpPayout" class="fin-input" value="95">
             </div>
         </div>
-        <div style="display: flex; justify-content: space-around; text-align: center;">
-            <div><small>BANCA ATUAL</small><br><b id="display-banca">R$ 0,00</b></div>
-            <div><small>LUCRO</small><br><b id="display-lucro" style="color:var(--neon-green)">R$ 0,00</b></div>
-        </div>
-        <button class="btn-salvar" onclick="salvarTudo()">SALVAR CONFIGURAÇÕES</button>
-    </div>
-
-    <div class="painel-estrat">
-        <div class="estrat-card">
-            <div style="font-size:10px">REGRA 1</div>
-            <button id="btn-REGRA 1" class="btn-toggle btn-on" onclick="toggleEstrat('REGRA 1')">ATIVO</button>
-        </div>
-        <div class="estrat-card">
-            <div style="font-size:10px">FLUXO SNIPER</div>
-            <button id="btn-FLUXO SNIPER" class="btn-toggle btn-on" onclick="toggleEstrat('FLUXO SNIPER')">ATIVO</button>
-        </div>
-        <div class="estrat-card">
-            <div style="font-size:10px">ZIGZAG FRACTAL</div>
-            <button id="btn-ZIGZAG FRACTAL" class="btn-toggle btn-on" onclick="toggleEstrat('ZIGZAG FRACTAL')">ATIVO</button>
-        </div>
-        <div class="estrat-card">
-            <div style="font-size:10px">SNIPER (RETRAÇÃO)</div>
-            <button id="btn-SNIPER (RETRAÇÃO)" class="btn-toggle btn-on" onclick="toggleEstrat('SNIPER (RETRAÇÃO)')">ATIVO</button>
+        <div class="display-stats">
+            <div><span>BANCA ATUAL</span><b id="display-banca">R$ 5000.00</b></div>
+            <div><span>LUCRO HOJE</span><b id="display-lucro" style="color:var(--neon-green)">R$ 0.00</b></div>
+            <div><span>CRESCIMENTO</span><b id="display-crescimento" style="color:var(--neon-blue)">0%</b></div>
+            <div><span>SIMULADOR</span><b style="color:var(--gale)">1%</b></div>
         </div>
     </div>
 
-    <div class="grid-container" id="grid"></div>
+    <div class="painel-central">
+        <div class="grid-estrat">
+            <div class="estrat-card">
+                <div class="estrat-name">REGRA 1</div>
+                <button id="btn-REGRA 1" class="btn-toggle" onclick="toggleEstrat('REGRA 1')">ATIVO</button>
+            </div>
+            <div class="estrat-card">
+                <div class="estrat-name">FLUXO SNIPER</div>
+                <button id="btn-FLUXO SNIPER" class="btn-toggle" onclick="toggleEstrat('FLUXO SNIPER')">ATIVO</button>
+            </div>
+            <div class="estrat-card">
+                <div class="estrat-name">ZIGZAG FRACTAL</div>
+                <button id="btn-ZIGZAG FRACTAL" class="btn-toggle" onclick="toggleEstrat('ZIGZAG FRACTAL')">ATIVO</button>
+            </div>
+            <div class="estrat-card">
+                <div class="estrat-name">SNIPER (RETRAÇÃO)</div>
+                <button id="btn-SNIPER (RETRAÇÃO)" class="btn-toggle" onclick="toggleEstrat('SNIPER (RETRAÇÃO)')">ATIVO</button>
+            </div>
+        </div>
+
+        <button class="btn-salvar-grande" onclick="salvarTudo()">SALVAR BANCA/PAYOUT</button>
+
+        <div class="barra-global">
+            <div class="stat-item"><span>WINS DIRETO</span><b id="g-direto" style="color:var(--neon-green)">0</b></div>
+            <div class="stat-item"><span>WINS GALES</span><b id="g-gales" style="color:var(--gale)">0</b></div>
+            <div class="stat-item"><span>LOSS TOTAL</span><b id="g-loss" style="color:var(--neon-red)">0</b></div>
+            <div class="stat-item"><span>PRECISÃO</span><b id="g-precisao">0%</b></div>
+        </div>
+    </div>
+
+    <div class="grid-monitores" id="grid"></div>
 
 <script>
-    // AJUSTE O LINK ABAIXO PARA O SEU LINK DO RENDER
     const URL_SERVIDOR = "https://multiplaskcmp.onrender.com";
     
+    // --- SUA LISTA DE ATIVOS INTEGRADA ---
+    const LISTA_ATIVOS = [
+        { id: "OFF", nome: "❌ DESATIVAR SLOT" },
+        { id: "1HZ10V", nome: "📈 Volatility 10 (1s)" },
+        { id: "1HZ25V", nome: "📈 Volatility 25 (1s)" },
+        { id: "1HZ50V", nome: "📈 Volatility 50 (1s)" },
+        { id: "1HZ75V", nome: "📈 Volatility 75 (1s)" },
+        { id: "1HZ100V", nome: "📈 Volatility 100 (1s)" },
+        { id: "R_10", nome: "📊 Volatility 10" },
+        { id: "R_25", nome: "📊 Volatility 25" },
+        { id: "R_50", nome: "📊 Volatility 50" },
+        { id: "R_75", nome: "📊 Volatility 75" },
+        { id: "R_100", nome: "📊 Volatility 100" },
+        { id: "JD10", nome: "🚀 Jump 10" },
+        { id: "JD25", nome: "🚀 Jump 25" },
+        { id: "JD50", nome: "🚀 Jump 50" },
+        { id: "JD75", nome: "🚀 Jump 75" },
+        { id: "JD100", nome: "🚀 Jump 100" },
+        { id: "BOOM300", nome: "💥 Boom 300" },
+        { id: "BOOM500", nome: "💥 Boom 500" },
+        { id: "BOOM1000", nome: "💥 Boom 1000" },
+        { id: "CRASH300", nome: "📉 Crash 300" },
+        { id: "CRASH500", nome: "📉 Crash 500" },
+        { id: "CRASH1000", nome: "📉 Crash 1000" },
+        { id: "ST50", nome: "🎢 Step Index" },
+        { id: "frxEURUSD", nome: "💱 EUR/USD" },
+        { id: "frxGBPUSD", nome: "💱 GBP/USD" },
+        { id: "frxUSDJPY", nome: "💱 USD/JPY" },
+        { id: "frxAUDUSD", nome: "💱 AUD/USD" },
+        { id: "frxUSDCAD", nome: "💱 USD/CAD" },
+        { id: "frxXAUUSD", nome: "🪙 OURO (XAU/USD)" },
+        { id: "cryBTCUSD", nome: "₿ BITCOIN (BTC)" },
+        { id: "cryETHUSD", nome: "♢ ETHEREUM (ETH)" }
+    ];
+
     let localEstatutos = { "REGRA 1": true, "FLUXO SNIPER": true, "ZIGZAG FRACTAL": true, "SNIPER (RETRAÇÃO)": true };
 
-    const ATIVOS = `
-        <option value="OFF">🔴 DESATIVADO</option>
-        <option value="1HZ10V">Volatility 10 (1s)</option>
-        <option value="1HZ100V">Volatility 100 (1s)</option>
-        <option value="frxEURUSD">EUR/USD</option>
-        <option value="cryBTCUSD">BITCOIN</option>
-    `;
-
-    // Cria os 6 cards de monitoramento
-    const grid = document.getElementById('grid');
-    for (let i = 1; i <= 6; i++) {
-        grid.innerHTML += `
-            <div class="card off" id="div-card${i}">
-                <div style="font-size:9px">MONITOR ${i}</div>
-                <div class="thermometer-wrap"><div class="thermometer-fill" id="therm-card${i}"></div></div>
-                <div id="status-card${i}" style="font-size:10px; color:var(--neon-blue)">OFF</div>
-                <div class="price-val" id="price-card${i}">0.0000</div>
-                <select class="select-ativo" id="select-card${i}" onchange="mudarAtivo('card${i}')">
-                    ${ATIVOS}
-                </select>
-            </div>`;
-    }
-
-    function toggleEstrat(nome) {
-        localEstatutos[nome] = !localEstatutos[nome];
-        const btn = document.getElementById(`btn-${nome}`);
-        btn.innerText = localEstatutos[nome] ? "ATIVO" : "DESATIVADO";
-        btn.className = localEstatutos[nome] ? "btn-toggle btn-on" : "btn-toggle btn-off";
+    function criarMonitores() {
+        const grid = document.getElementById('grid');
+        let optionsHTML = LISTA_ATIVOS.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
+        
+        for (let i = 1; i <= 6; i++) {
+            grid.innerHTML += `
+                <div class="card" id="div-card${i}">
+                    <div style="font-size:8px; color:#888;">MONITOR ${i}</div>
+                    <div class="thermometer-wrap"><div class="thermometer-fill" id="therm-card${i}"></div></div>
+                    <div class="status-box" id="status-card${i}">MONITORANDO</div>
+                    <div class="price" id="price-card${i}">0.00000</div>
+                    <select class="select-ativo" id="select-card${i}" onchange="mudarAtivo('card${i}')">
+                        ${optionsHTML}
+                    </select>
+                </div>`;
+        }
     }
 
     async function salvarTudo() {
@@ -128,42 +177,48 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ banca, payout, estatutos: localEstatutos })
             });
-            alert("Configurações Salvas!");
-        } catch (e) { alert("Erro ao conectar ao servidor."); }
+            alert("CONFIGURAÇÕES SALVAS!");
+        } catch (e) { alert("ERRO DE CONEXÃO"); }
     }
 
     async function mudarAtivo(cardId) {
-        const select = document.getElementById(`select-${cardId}`);
+        const sel = document.getElementById(`select-${cardId}`);
         await fetch(`${URL_SERVIDOR}/mudar`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ cardId, ativoId: select.value, nomeAtivo: select.options[select.selectedIndex].text })
+            body: JSON.stringify({ cardId, ativoId: sel.value, nomeAtivo: sel.options[sel.selectedIndex].text })
         });
+    }
+
+    function toggleEstrat(nome) {
+        localEstatutos[nome] = !localEstatutos[nome];
+        const btn = document.getElementById(`btn-${nome}`);
+        btn.innerText = localEstatutos[nome] ? "ATIVO" : "DESATIVADO";
+        btn.classList.toggle('btn-off', !localEstatutos[nome]);
     }
 
     async function sincronizar() {
         try {
             const res = await fetch(`${URL_SERVIDOR}/status`);
             const d = await res.json();
-            
-            document.getElementById('conexao').innerText = "SERVIDOR ONLINE";
-            document.getElementById('conexao').style.color = "var(--neon-green)";
             document.getElementById('display-banca').innerText = "R$ " + d.global.banca;
             document.getElementById('display-lucro').innerText = "R$ " + d.global.lucro;
-
+            document.getElementById('g-direto').innerText = d.global.winDireto;
+            document.getElementById('g-gales').innerText = d.global.winGales;
+            document.getElementById('g-loss').innerText = d.global.loss;
+            document.getElementById('g-precisao').innerText = d.global.precisao + "%";
+            
             d.ativos.forEach(a => {
-                const card = document.getElementById(`div-${a.cardId}`);
-                if(a.status === "OFF") card.classList.add('off'); else card.classList.remove('off');
-                document.getElementById(`price-${a.cardId}`).innerText = a.preco;
-                document.getElementById(`status-${a.cardId}`).innerText = a.status;
-                document.getElementById(`therm-${a.cardId}`).style.width = a.forca + "%";
+                if(document.getElementById(`price-${a.cardId}`)) {
+                    document.getElementById(`price-${a.cardId}`).innerText = a.preco;
+                    document.getElementById(`status-${a.cardId}`).innerText = a.status;
+                    document.getElementById(`therm-${a.cardId}`).style.width = a.forca + "%";
+                }
             });
-        } catch (e) {
-            document.getElementById('conexao').innerText = "OFFLINE / RECONECTANDO...";
-            document.getElementById('conexao').style.color = "var(--neon-red)";
-        }
+        } catch (e) {}
     }
 
+    criarMonitores();
     setInterval(sincronizar, 1000);
 </script>
 </body>
