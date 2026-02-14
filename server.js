@@ -14,32 +14,34 @@ const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI";
 const TG_CHAT_ID = "-1003355965894"; 
 const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
 
-// Variáveis globais
-let fin = { bancaInicial: 5000, bancaAtual: 5000, payout: 0.95, percentual: 0.01 }; // Ajustado para 1% padrão
+// Variáveis globais - Agora iniciam em 0 para obedecer o painel
+let fin = { bancaInicial: 0, bancaAtual: 0, payout: 0.95, percentual: 0.01 }; 
 let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0 };
 let motores = {};
 
-// --- ROTA CORRIGIDA PARA RECEBER DADOS DO PAINEL ---
+// --- ROTA DE CONFIGURAÇÃO (RECEBE ORDENS DO PAINEL) ---
 app.post('/config-financeira', (req, res) => {
     const { banca, payout } = req.body;
 
     if (banca !== undefined) {
+        // Define a base de cálculo e o saldo atual simultaneamente
         fin.bancaInicial = Number(banca);
-        fin.bancaAtual = Number(banca); // Reseta a banca atual para a nova banca inicial
-        console.log(`Banca atualizada via painel: R$ ${fin.bancaInicial}`);
+        fin.bancaAtual = Number(banca); 
+        console.log(`>>> ORDEM DO PAINEL: Banca iniciada com R$ ${fin.bancaInicial}`);
     }
 
     if (payout !== undefined) {
-        // Converte de 95 para 0.95
+        // Converte o valor inteiro (ex: 95) para decimal (0.95)
         fin.payout = Number(payout) / 100;
     }
 
     res.json({ success: true, fin });
 });
 
-// --- STATUS PARA O PAINEL ---
+// --- STATUS PARA O PAINEL (LIDO A CADA 1 SEGUNDO) ---
 app.get('/status', (req, res) => {
-    const lucroReal = fin.bancaAtual - fin.bancaInicial;
+    // Lucro dinâmico: Saldo Atual menos o que você digitou no painel
+    const lucroReal = fin.bancaInicial > 0 ? (fin.bancaAtual - fin.bancaInicial) : 0;
     const totalWins = stats.winDireto + stats.winG1 + stats.winG2;
     const totalOps = totalWins + stats.loss;
     
@@ -62,7 +64,7 @@ app.get('/status', (req, res) => {
     });
 });
 
-// --- RESTANTE DA LÓGICA DO MOTOR (MANTIDA) ---
+// --- LÓGICA DE TEMPO E TELEGRAM (MANTIDA INTEGRALMENTE) ---
 function obterHorarios() {
     const agora = new Date();
     const inicio = agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -92,6 +94,7 @@ function enviarTelegram(msg) {
     }).catch(e => console.log("Erro TG:", e.message));
 }
 
+// --- ANÁLISE TÉCNICA (MANTIDA INTEGRALMENTE) ---
 function analyzeCandlePatterns(list) {
     if(list.length < 5) return null;
     const last = list[list.length - 1];
@@ -108,6 +111,7 @@ function analyzeCandlePatterns(list) {
     return null;
 }
 
+// --- MOTOR DE OPERAÇÕES (MANTIDA INTEGRALMENTE) ---
 function iniciarMotor(cardId, ativoId, nomeAtivo) {
     if (motores[cardId]?.ws) motores[cardId].ws.terminate();
     if (ativoId === "OFF") return;
@@ -143,6 +147,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 m.alertado = false;
                 const pattern = analyzeCandlePatterns(m.history);
                 if (pattern) {
+                    // Valor da entrada baseado na banca definida pelo painel
                     let valorEntrada = fin.bancaInicial * fin.percentual;
                     if(fin.bancaAtual >= valorEntrada){
                         fin.bancaAtual -= valorEntrada;
