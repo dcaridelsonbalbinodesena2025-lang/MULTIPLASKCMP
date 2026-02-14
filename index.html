@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KCM - Multi Estratégia</title>
+    <title>KCM - BRAIN PRO CONTROL</title>
     <style>
         :root { 
             --neon-blue: #1e90ff; --neon-green: #00ff88; --neon-red: #ff3355; 
@@ -56,8 +56,8 @@
 </head>
 <body>
 
-    <div class="logo">K.C<span>📈</span>M MULTI/ESTRATEGIA-CONTROL</div>
-    <div id="conexao" class="srv-status">BOT INTEGRADO - SISTEMA ATIVO</div>
+    <div class="logo">K.C<span>📈</span>M BRAIN PRO-CONTROL</div>
+    <div id="conexao" class="srv-status">BOT OPERACIONAL - PRICE ACTION ATIVO</div>
 
     <div class="painel-financeiro">
         <div class="fin-row">
@@ -81,19 +81,19 @@
     <div class="painel-central">
         <div class="grid-estrat">
             <div class="estrat-card">
-                <div class="estrat-name">REGRA 1</div>
+                <div class="estrat-name">MARTELO / ESTRELA</div>
                 <button id="btn-REGRA 1" class="btn-toggle" onclick="toggleEstrat('REGRA 1')">ATIVO</button>
             </div>
             <div class="estrat-card">
-                <div class="estrat-name">FLUXO SNIPER</div>
+                <div class="estrat-name">ENGOLFO DE FORÇA</div>
                 <button id="btn-FLUXO SNIPER" class="btn-toggle" onclick="toggleEstrat('FLUXO SNIPER')">ATIVO</button>
             </div>
             <div class="estrat-card">
-                <div class="estrat-name">ZIGZAG FRACTAL</div>
+                <div class="estrat-name">FILTRO MÉDIA EMA 20</div>
                 <button id="btn-ZIGZAG FRACTAL" class="btn-toggle" onclick="toggleEstrat('ZIGZAG FRACTAL')">ATIVO</button>
             </div>
             <div class="estrat-card">
-                <div class="estrat-name">SNIPER (RETRAÇÃO)</div>
+                <div class="estrat-name">REJEIÇÃO DE PAVIO</div>
                 <button id="btn-SNIPER (RETRAÇÃO)" class="btn-toggle" onclick="toggleEstrat('SNIPER (RETRAÇÃO)')">ATIVO</button>
             </div>
         </div>
@@ -159,7 +159,7 @@
                 <div class="card" id="div-card${i}">
                     <div style="font-size:8px; color:#888;">MONITOR ${i}</div>
                     <div class="thermometer-wrap"><div class="thermometer-fill" id="therm-card${i}"></div></div>
-                    <div class="status-box" id="status-card${i}">MONITORANDO</div>
+                    <div class="status-box" id="status-card${i}">ANALISANDO VELAS</div>
                     <div class="price" id="price-card${i}">0.00000</div>
                     <select class="select-ativo" id="select-card${i}" onchange="mudarAtivo('card${i}')">
                         ${optionsHTML}
@@ -212,7 +212,7 @@
                 if(document.getElementById(`price-${a.cardId}`)) {
                     document.getElementById(`price-${a.cardId}`).innerText = a.preco;
                     document.getElementById(`status-${a.cardId}`).innerText = a.status;
-                    document.getElementById(`therm-${a.cardId}`).style.width = a.forca + "%";
+                    if(a.forca) document.getElementById(`therm-${a.cardId}`).style.width = a.forca + "%";
                 }
             });
         } catch (e) {}
