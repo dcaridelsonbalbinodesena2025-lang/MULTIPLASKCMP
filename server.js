@@ -23,6 +23,27 @@ let rankingEstrategias = {}; // Será preenchido dinamicamente pelos nomes dos p
 
 let motores = {};
 
+// --- FUNÇÕES DE AUXÍLIO PARA MENSAGENS ---
+function obterHorarios() {
+    const agora = new Date();
+    const inicio = agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const fim = new Date(agora.getTime() + 60000).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    return { inicio, fim };
+}
+
+function gerarTextoBase(m, status) {
+    const h = obterHorarios();
+    const winTotal = stats.winDireto + stats.winG1 + stats.winG2;
+    return `🚀 *BRAIN PRO: ${status}*\n\n` +
+           `📊 Ativo: ${m.nome}\n` +
+           `🎯 Padrão: ${m.op.est}\n` +
+           `📈 Direção: ${m.op.dir}\n\n` +
+           `⏰ Início: ${h.inicio}\n` +
+           `🏁 Fim: ${h.fim}\n\n` +
+           `🏆 Placar: ${winTotal}W | ${stats.loss}L\n` +
+           `💰 Banca: R$ ${fin.bancaAtual.toFixed(2)}`;
+}
+
 // --- FUNÇÕES DE APOIO (LÓGICA BRAIN PRO) ---
 function getEMA(list, period = 20) {
     if (list.length < period) return 0;
@@ -94,28 +115,24 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             const agora = new Date();
             const s = agora.getSeconds();
             
-            // LÓGICA DE ENTRADA: EXATAMENTE NO FECHAMENTO DA VELA (BRAIN PRO STYLE)
             if (s === 0 && !m.op.ativa) {
                 const pattern = analyzeCandlePatterns(m.history);
                 const ema20 = getEMA(m.history, 20);
 
                 if (pattern) {
-                    // Filtro de Tendência (EMA 20)
                     let trendOk = (pattern.dir === "CALL" && ohlc.close > ema20) || 
                                   (pattern.dir === "PUT" && ohlc.close < ema20);
 
                     if (trendOk) {
                         disparar(m, pattern.name, pattern.dir, fin.bancaAtual * 0.01, parseFloat(ohlc.close));
-                        enviarTelegram(`🚀 *BRAIN PRO: ENTRADA*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n📈 Direção: ${pattern.dir}`);
+                        enviarTelegram(gerarTextoBase(m, "ENTRADA"));
                     }
                 }
-                // Atualiza histórico local
                 m.history.push({ open: ohlc.open, high: ohlc.high, low: ohlc.low, close: ohlc.close });
                 if (m.history.length > 60) m.history.shift();
             }
         }
 
-        // Lógica de GALE e Resultado
         if (m.op.ativa) {
             m.op.t--;
             if (m.op.t <= 0) {
@@ -123,15 +140,15 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 if (ganhou) {
                     if(m.op.g===0) stats.winDireto++; else if(m.op.g===1) stats.winG1++; else stats.winG2++;
                     fin.bancaAtual += (m.op.val * fin.payout);
-                    enviarTelegram(`✅ *GREEN: ${m.nome}*\n💰 Resultado: Win G${m.op.g}`);
+                    enviarTelegram(gerarTextoBase(m, "GREEN ✅"));
                     m.op.ativa = false;
                     stats.totalAnalises++;
                 } else if (m.op.g < 2) {
                     m.op.g++; m.op.val *= 2; m.op.t = 60; m.op.pre = m.preco;
-                    enviarTelegram(`⚠️ *GALE ${m.op.g}: ${m.nome}*`);
+                    enviarTelegram(gerarTextoBase(m, `GALE ${m.op.g}`));
                 } else {
                     stats.loss++; stats.totalAnalises++;
-                    enviarTelegram(`❌ *LOSS: ${m.nome}*`);
+                    enviarTelegram(gerarTextoBase(m, "RED ❌"));
                     m.op.ativa = false;
                 }
             }
