@@ -59,7 +59,6 @@ function analyzeCandlePatterns(list) {
     const body = Math.abs(last.close - last.open);
     const upperWick = last.high - Math.max(last.open, last.close);
     const lowerWick = Math.min(last.open, last.close) - last.low;
-    const fullSize = last.high - last.low;
 
     if (lowerWick > body * 2 && upperWick < body * 0.5) return { name: "MARTELO", dir: "CALL" };
     if (upperWick > body * 2 && lowerWick < body * 0.5) return { name: "ESTRELA", dir: "PUT" };
@@ -94,22 +93,36 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             m.preco = parseFloat(ohlc.close).toFixed(5);
             const s = new Date().getSeconds();
 
-            // --- LÓGICA DE PRÉ-ALERTA (Aos 50 segundos da vela) ---
             if (s >= 50 && s <= 55 && !m.op.ativa && !m.alertado) {
                 const pattern = analyzeCandlePatterns([...m.history, { open: ohlc.open, high: ohlc.high, low: ohlc.low, close: ohlc.close }]);
                 if (pattern) {
                     enviarTelegram(`⚠️ *ALERTA DE POSSÍVEL ENTRADA*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n🕒 Prepare-se para o fechamento!`);
-                    m.alertado = true; // Evita spam de alerta na mesma vela
+                    m.alertado = true;
                 }
             }
 
-            // --- ENTRADA REAL (No segundo 0) ---
             if (s === 0 && !m.op.ativa) {
-                m.alertado = false; // Reseta o alerta para a próxima vela
+                m.alertado = false;
                 const pattern = analyzeCandlePatterns(m.history);
                 if (pattern) {
-                    m.op = { ativa: true, est: pattern.name, pre: parseFloat(ohlc.close), t: 60, dir: pattern.dir, g: 0, val: fin.bancaAtual * 0.01 };
-                    enviarTelegram(gerarTextoBase(m, "ENTRADA CONFIRMADA"));
+
+                    let valorEntrada = fin.bancaInicial * 0.10;
+
+                    if(fin.bancaAtual >= valorEntrada){
+                        fin.bancaAtual -= valorEntrada;
+
+                        m.op = { 
+                            ativa: true, 
+                            est: pattern.name, 
+                            pre: parseFloat(ohlc.close), 
+                            t: 60, 
+                            dir: pattern.dir, 
+                            g: 0, 
+                            val: valorEntrada 
+                        };
+
+                        enviarTelegram(gerarTextoBase(m, "ENTRADA CONFIRMADA"));
+                    }
                 }
             }
         }
@@ -117,17 +130,47 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
         // --- GERENCIAMENTO DE RESULTADOS ---
         if (m.op.ativa) {
             m.op.t--;
+
             if (m.op.t <= 0) {
+
                 let ganhou = (m.op.dir === "CALL" && m.preco > m.op.pre) || (m.op.dir === "PUT" && m.preco < m.op.pre);
+
                 if (ganhou) {
-                    if(m.op.g===0) stats.winDireto++; else if(m.op.g===1) stats.winG1++; else stats.winG2++;
-                    fin.bancaAtual += (m.op.val * fin.payout);
+
+                    if(m.op.g===0) stats.winDireto++;
+                    else if(m.op.g===1) stats.winG1++;
+                    else stats.winG2++;
+
+                    fin.bancaAtual += m.op.val + (m.op.val * fin.payout);
+
                     enviarTelegram(gerarTextoBase(m, "GREEN ✅"));
                     m.op.ativa = false;
-                } else if (m.op.g < 2) {
-                    m.op.g++; m.op.val *= 2; m.op.t = 60; m.op.pre = m.preco;
-                    enviarTelegram(gerarTextoBase(m, `GALE ${m.op.g} ⚠️`));
-                } else {
+
+                } 
+                else if (m.op.g < 2) {
+
+                    m.op.g++;
+                    m.op.val *= 2;
+
+                    if(fin.bancaAtual >= m.op.val){
+
+                        fin.bancaAtual -= m.op.val;
+
+                        m.op.t = 60;
+                        m.op.pre = m.preco;
+
+                        enviarTelegram(gerarTextoBase(m, `GALE ${m.op.g} ⚠️`));
+
+                    } else {
+
+                        stats.loss++;
+                        enviarTelegram(gerarTextoBase(m, "RED ❌ (BANCA INSUFICIENTE)"));
+                        m.op.ativa = false;
+                    }
+
+                } 
+                else {
+
                     stats.loss++;
                     enviarTelegram(gerarTextoBase(m, "RED ❌"));
                     m.op.ativa = false;
@@ -135,16 +178,33 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             }
         }
     });
+
     motores[cardId] = m;
 }
 
 // Endpoints mantidos para o HTML
 app.get('/status', (req, res) => {
     res.json({
-        global: { winDireto: stats.winDireto, winGales: (stats.winG1 + stats.winG2), loss: stats.loss, banca: fin.bancaAtual.toFixed(2), lucro: (fin.bancaAtual - 5000).toFixed(2), precisao: ((stats.winDireto+stats.winG1+stats.winG2)/(stats.winDireto+stats.winG1+stats.winG2+stats.loss)*100 || 0).toFixed(1) },
-        ativos: Object.keys(motores).map(id => ({ cardId: id, nome: motores[id].nome, preco: motores[id].preco, status: motores[id].op.ativa ? "OPERANDO" : "ANALISANDO" }))
+        global: { 
+            winDireto: stats.winDireto, 
+            winGales: (stats.winG1 + stats.winG2), 
+            loss: stats.loss, 
+            banca: fin.bancaAtual.toFixed(2), 
+            lucro: (fin.bancaAtual - 5000).toFixed(2), 
+            precisao: ((stats.winDireto+stats.winG1+stats.winG2)/(stats.winDireto+stats.winG1+stats.winG2+stats.loss)*100 || 0).toFixed(1) 
+        },
+        ativos: Object.keys(motores).map(id => ({
+            cardId: id, 
+            nome: motores[id].nome, 
+            preco: motores[id].preco, 
+            status: motores[id].op.ativa ? "OPERANDO" : "ANALISANDO"
+        }))
     });
 });
-app.post('/mudar', (req, res) => { iniciarMotor(req.body.cardId, req.body.ativoId, req.body.nomeAtivo); res.json({ success: true }); });
+
+app.post('/mudar', (req, res) => { 
+    iniciarMotor(req.body.cardId, req.body.ativoId, req.body.nomeAtivo); 
+    res.json({ success: true }); 
+});
 
 app.listen(PORT, () => console.log(`Servidor Brain Pro Alerta rodando na porta ${PORT}`));
