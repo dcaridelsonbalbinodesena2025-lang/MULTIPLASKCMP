@@ -14,7 +14,7 @@ const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI";
 const TG_CHAT_ID = "-1003355965894"; 
 const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
 
-let fin = { bancaInicial: 5000, bancaAtual: 5000, payout: 0.95 };
+let fin = { bancaInicial: 5000, bancaAtual: 5000, payout: 0.95, percentual: 0.10 };
 let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0 };
 let motores = {};
 
@@ -106,7 +106,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 const pattern = analyzeCandlePatterns(m.history);
                 if (pattern) {
 
-                    let valorEntrada = fin.bancaInicial * 0.10;
+                    let valorEntrada = fin.bancaInicial * fin.percentual;
 
                     if(fin.bancaAtual >= valorEntrada){
                         fin.bancaAtual -= valorEntrada;
@@ -127,7 +127,6 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             }
         }
 
-        // --- GERENCIAMENTO DE RESULTADOS ---
         if (m.op.ativa) {
             m.op.t--;
 
@@ -181,6 +180,21 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
     motores[cardId] = m;
 }
+
+// --- NOVO ENDPOINT FINANCEIRO EDITÁVEL ---
+app.post('/financeiro', (req, res) => {
+
+    if(req.body.bancaInicial !== undefined){
+        fin.bancaInicial = Number(req.body.bancaInicial);
+        fin.bancaAtual = Number(req.body.bancaInicial);
+    }
+
+    if(req.body.percentual !== undefined){
+        fin.percentual = Number(req.body.percentual);
+    }
+
+    res.json({ success: true, fin });
+});
 
 // Endpoints mantidos para o HTML
 app.get('/status', (req, res) => {
