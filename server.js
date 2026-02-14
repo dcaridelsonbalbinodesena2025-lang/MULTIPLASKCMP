@@ -14,11 +14,55 @@ const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI";
 const TG_CHAT_ID = "-1003355965894"; 
 const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
 
-let fin = { bancaInicial: 5000, bancaAtual: 5000, payout: 0.95, percentual: 0.10 };
+// Variáveis globais
+let fin = { bancaInicial: 5000, bancaAtual: 5000, payout: 0.95, percentual: 0.01 }; // Ajustado para 1% padrão
 let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0 };
 let motores = {};
 
-// --- AUXILIARES ---
+// --- ROTA CORRIGIDA PARA RECEBER DADOS DO PAINEL ---
+app.post('/config-financeira', (req, res) => {
+    const { banca, payout } = req.body;
+
+    if (banca !== undefined) {
+        fin.bancaInicial = Number(banca);
+        fin.bancaAtual = Number(banca); // Reseta a banca atual para a nova banca inicial
+        console.log(`Banca atualizada via painel: R$ ${fin.bancaInicial}`);
+    }
+
+    if (payout !== undefined) {
+        // Converte de 95 para 0.95
+        fin.payout = Number(payout) / 100;
+    }
+
+    res.json({ success: true, fin });
+});
+
+// --- STATUS PARA O PAINEL ---
+app.get('/status', (req, res) => {
+    const lucroReal = fin.bancaAtual - fin.bancaInicial;
+    const totalWins = stats.winDireto + stats.winG1 + stats.winG2;
+    const totalOps = totalWins + stats.loss;
+    
+    res.json({
+        global: { 
+            winDireto: stats.winDireto, 
+            winGales: (stats.winG1 + stats.winG2), 
+            loss: stats.loss, 
+            banca: fin.bancaAtual.toFixed(2), 
+            lucro: lucroReal.toFixed(2), 
+            precisao: (totalOps > 0 ? (totalWins / totalOps * 100) : 0).toFixed(1) 
+        },
+        ativos: Object.keys(motores).map(id => ({
+            cardId: id, 
+            nome: motores[id].nome, 
+            preco: motores[id].preco, 
+            status: motores[id].op.ativa ? "OPERANDO" : "ANALISANDO",
+            forca: motores[id].forca || 50
+        }))
+    });
+});
+
+// --- RESTANTE DA LÓGICA DO MOTOR (MANTIDA) ---
 function obterHorarios() {
     const agora = new Date();
     const inicio = agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -29,13 +73,10 @@ function obterHorarios() {
 function gerarTextoBase(m, status, padraoNome = "", direcao = "") {
     const h = obterHorarios();
     const winTotal = stats.winDireto + stats.winG1 + stats.winG2;
-    const pNome = padraoNome || (m.op ? m.op.est : "ANALISANDO");
-    const dNome = direcao || (m.op ? m.op.dir : "---");
-
     return `🚀 *BRAIN PRO: ${status}*\n\n` +
            `📊 Ativo: ${m.nome}\n` +
-           `🎯 Padrão: ${pNome}\n` +
-           `📈 Direção: ${dNome}\n\n` +
+           `🎯 Padrão: ${padraoNome || m.op.est}\n` +
+           `📈 Direção: ${direcao || m.op.dir}\n\n` +
            `⏰ Início: ${h.inicio}\n` +
            `🏁 Fim: ${h.fim}\n\n` +
            `🏆 Placar: ${winTotal}W | ${stats.loss}L\n` +
@@ -51,7 +92,6 @@ function enviarTelegram(msg) {
     }).catch(e => console.log("Erro TG:", e.message));
 }
 
-// --- LÓGICA DE PADRÕES ---
 function analyzeCandlePatterns(list) {
     if(list.length < 5) return null;
     const last = list[list.length - 1];
@@ -68,7 +108,6 @@ function analyzeCandlePatterns(list) {
     return null;
 }
 
-// --- MOTOR PRINCIPAL ---
 function iniciarMotor(cardId, ativoId, nomeAtivo) {
     if (motores[cardId]?.ws) motores[cardId].ws.terminate();
     if (ativoId === "OFF") return;
@@ -87,7 +126,6 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
     m.ws.on('message', (data) => {
         const res = JSON.parse(data.toString());
         if (res.candles) m.history = res.candles;
-
         if (res.ohlc) {
             const ohlc = res.ohlc;
             m.preco = parseFloat(ohlc.close).toFixed(5);
@@ -96,7 +134,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             if (s >= 50 && s <= 55 && !m.op.ativa && !m.alertado) {
                 const pattern = analyzeCandlePatterns([...m.history, { open: ohlc.open, high: ohlc.high, low: ohlc.low, close: ohlc.close }]);
                 if (pattern) {
-                    enviarTelegram(`⚠️ *ALERTA DE POSSÍVEL ENTRADA*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n🕒 Prepare-se para o fechamento!`);
+                    enviarTelegram(`⚠️ *ALERTA DE POSSÍVEL ENTRADA*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n🕒 Prepare-se!`);
                     m.alertado = true;
                 }
             }
@@ -105,22 +143,10 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 m.alertado = false;
                 const pattern = analyzeCandlePatterns(m.history);
                 if (pattern) {
-
                     let valorEntrada = fin.bancaInicial * fin.percentual;
-
                     if(fin.bancaAtual >= valorEntrada){
                         fin.bancaAtual -= valorEntrada;
-
-                        m.op = { 
-                            ativa: true, 
-                            est: pattern.name, 
-                            pre: parseFloat(ohlc.close), 
-                            t: 60, 
-                            dir: pattern.dir, 
-                            g: 0, 
-                            val: valorEntrada 
-                        };
-
+                        m.op = { ativa: true, est: pattern.name, pre: parseFloat(ohlc.close), t: 60, dir: pattern.dir, g: 0, val: valorEntrada };
                         enviarTelegram(gerarTextoBase(m, "ENTRADA CONFIRMADA"));
                     }
                 }
@@ -129,92 +155,32 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
         if (m.op.ativa) {
             m.op.t--;
-
             if (m.op.t <= 0) {
-
                 let ganhou = (m.op.dir === "CALL" && m.preco > m.op.pre) || (m.op.dir === "PUT" && m.preco < m.op.pre);
-
                 if (ganhou) {
-
-                    if(m.op.g===0) stats.winDireto++;
-                    else if(m.op.g===1) stats.winG1++;
-                    else stats.winG2++;
-
+                    if(m.op.g===0) stats.winDireto++; else if(m.op.g===1) stats.winG1++; else stats.winG2++;
                     fin.bancaAtual += m.op.val + (m.op.val * fin.payout);
-
                     enviarTelegram(gerarTextoBase(m, "GREEN ✅"));
                     m.op.ativa = false;
-
-                } 
-                else if (m.op.g < 2) {
-
-                    m.op.g++;
-                    m.op.val *= 2;
-
+                } else if (m.op.g < 2) {
+                    m.op.g++; m.op.val *= 2;
                     if(fin.bancaAtual >= m.op.val){
-
                         fin.bancaAtual -= m.op.val;
-
-                        m.op.t = 60;
-                        m.op.pre = m.preco;
-
+                        m.op.t = 60; m.op.pre = m.preco;
                         enviarTelegram(gerarTextoBase(m, `GALE ${m.op.g} ⚠️`));
-
                     } else {
-
-                        stats.loss++;
-                        enviarTelegram(gerarTextoBase(m, "RED ❌ (BANCA INSUFICIENTE)"));
+                        stats.loss++; enviarTelegram(gerarTextoBase(m, "RED ❌ (SALDO BAIXO)"));
                         m.op.ativa = false;
                     }
-
-                } 
-                else {
-
-                    stats.loss++;
-                    enviarTelegram(gerarTextoBase(m, "RED ❌"));
+                } else {
+                    stats.loss++; enviarTelegram(gerarTextoBase(m, "RED ❌"));
                     m.op.ativa = false;
                 }
             }
         }
     });
-
     motores[cardId] = m;
 }
-
-// --- NOVO ENDPOINT FINANCEIRO EDITÁVEL ---
-app.post('/financeiro', (req, res) => {
-
-    if(req.body.bancaInicial !== undefined){
-        fin.bancaInicial = Number(req.body.bancaInicial);
-        fin.bancaAtual = Number(req.body.bancaInicial);
-    }
-
-    if(req.body.percentual !== undefined){
-        fin.percentual = Number(req.body.percentual);
-    }
-
-    res.json({ success: true, fin });
-});
-
-// Endpoints mantidos para o HTML
-app.get('/status', (req, res) => {
-    res.json({
-        global: { 
-            winDireto: stats.winDireto, 
-            winGales: (stats.winG1 + stats.winG2), 
-            loss: stats.loss, 
-            banca: fin.bancaAtual.toFixed(2), 
-            lucro: (fin.bancaAtual - 5000).toFixed(2), 
-            precisao: ((stats.winDireto+stats.winG1+stats.winG2)/(stats.winDireto+stats.winG1+stats.winG2+stats.loss)*100 || 0).toFixed(1) 
-        },
-        ativos: Object.keys(motores).map(id => ({
-            cardId: id, 
-            nome: motores[id].nome, 
-            preco: motores[id].preco, 
-            status: motores[id].op.ativa ? "OPERANDO" : "ANALISANDO"
-        }))
-    });
-});
 
 app.post('/mudar', (req, res) => { 
     iniciarMotor(req.body.cardId, req.body.ativoId, req.body.nomeAtivo); 
