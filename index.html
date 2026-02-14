@@ -15,7 +15,6 @@
         
         .srv-status { font-size: 9px; padding: 4px 12px; border-radius: 20px; background: #000; border: 1px solid var(--neon-green); color: var(--neon-green); margin-bottom: 15px; text-transform: uppercase; }
 
-        /* PAINEL FINANCEIRO */
         .painel-financeiro { background: #111418; border: 2px solid var(--neon-green); border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; margin-bottom: 15px; }
         .fin-row { display: flex; gap: 10px; justify-content: space-between; margin-bottom: 15px; }
         .fin-input-group { flex: 1; }
@@ -25,26 +24,22 @@
         .display-stats { display: flex; justify-content: space-around; text-align: center; margin-top: 10px; }
         .display-stats div { flex: 1; }
         .display-stats span { font-size: 8px; color: #888; display: block; }
-        .display-stats b { font-size: 14px; }
+        .display-stats b { font-size: 14px; cursor: pointer; }
 
-        /* PAINEL ESTRATÉGIAS */
         .painel-central { background: #111418; border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; border: 1px solid #222; }
         .grid-estrat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
         .estrat-card { background: #000; padding: 10px; border-radius: 10px; border: 1px solid #222; text-align: center; }
         .estrat-name { font-size: 9px; color: #888; margin-bottom: 5px; }
         .btn-toggle { background: var(--neon-green); color: #000; padding: 6px; font-size: 10px; font-weight: bold; border-radius: 5px; border: none; width: 100%; cursor: pointer; }
         .btn-off { background: var(--neon-red); color: #fff; }
-        .estrat-results { font-size: 9px; margin-top: 5px; display: flex; justify-content: space-around; }
 
         .btn-salvar-grande { background: var(--neon-green); color: #000; border: none; padding: 12px; border-radius: 8px; font-weight: 900; cursor: pointer; width: 100%; margin: 15px 0; font-size: 12px; }
 
-        /* BARRA AZUL */
         .barra-global { background: #05070a; border: 1px solid var(--royal-blue); border-radius: 10px; width: 100%; padding: 10px 0; display: flex; justify-content: space-around; margin-bottom: 20px; }
         .stat-item { text-align: center; }
         .stat-item span { font-size: 8px; color: #888; }
         .stat-item b { display: block; font-size: 14px; }
 
-        /* MONITORES */
         .grid-monitores { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 600px; }
         .card { background: #080a0d; border-radius: 15px; padding: 12px; border: 1px solid #1e2228; text-align: center; }
         .thermometer-wrap { width: 100%; height: 6px; background: #222; border-radius: 3px; margin: 10px 0; overflow: hidden; }
@@ -63,18 +58,18 @@
         <div class="fin-row">
             <div class="fin-input-group">
                 <label>BANCA INICIAL (R$)</label>
-                <input type="number" id="inpBanca" class="fin-input" value="5000">
+                <input type="number" id="inpBanca" class="fin-input" value="5000" onfocus="estaEditando = true" onblur="estaEditando = false">
             </div>
             <div class="fin-input-group">
                 <label>PAYOUT (%)</label>
-                <input type="number" id="inpPayout" class="fin-input" value="95">
+                <input type="number" id="inpPayout" class="fin-input" value="95" onfocus="estaEditando = true" onblur="estaEditando = false">
             </div>
         </div>
         <div class="display-stats">
             <div><span>BANCA ATUAL</span><b id="display-banca">R$ 5000.00</b></div>
             <div><span>LUCRO HOJE</span><b id="display-lucro" style="color:var(--neon-green)">R$ 0.00</b></div>
             <div><span>CRESCIMENTO</span><b id="display-crescimento" style="color:var(--neon-blue)">0%</b></div>
-            <div><span>SIMULADOR</span><b style="color:var(--gale)">1%</b></div>
+            <div><span>SIMULADOR</span><b id="display-simulador" style="color:var(--gale)">1%</b></div>
         </div>
     </div>
 
@@ -112,8 +107,8 @@
 
 <script>
     const URL_SERVIDOR = "https://multiplaskcmp.onrender.com";
+    let estaEditando = false; // Trava para não resetar o valor enquanto você digita
     
-    // --- SUA LISTA DE ATIVOS INTEGRADA ---
     const LISTA_ATIVOS = [
         { id: "OFF", nome: "❌ DESATIVAR SLOT" },
         { id: "1HZ10V", nome: "📈 Volatility 10 (1s)" },
@@ -153,7 +148,6 @@
     function criarMonitores() {
         const grid = document.getElementById('grid');
         let optionsHTML = LISTA_ATIVOS.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
-        
         for (let i = 1; i <= 6; i++) {
             grid.innerHTML += `
                 <div class="card" id="div-card${i}">
@@ -177,8 +171,8 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ banca, payout, estatutos: localEstatutos })
             });
-            alert("CONFIGURAÇÕES SALVAS!");
-        } catch (e) { alert("ERRO DE CONEXÃO"); }
+            console.log("Configurações enviadas ao servidor.");
+        } catch (e) { console.log("Erro ao salvar."); }
     }
 
     async function mudarAtivo(cardId) {
@@ -198,6 +192,7 @@
     }
 
     async function sincronizar() {
+        if (estaEditando) return; // Se estiver digitando, não atualiza a tela
         try {
             const res = await fetch(`${URL_SERVIDOR}/status`);
             const d = await res.json();
@@ -218,68 +213,47 @@
         } catch (e) {}
     }
 
+    // ====== DUPLO CLIQUE EDITÁVEL CORRIGIDO ======
+    function editarValor(elemento, valorAtual, callback, sufixo = "") {
+        estaEditando = true;
+        const input = document.createElement("input");
+        input.type = "number";
+        input.value = valorAtual;
+        input.className = "fin-input";
+        input.style.width = "100px";
+
+        elemento.innerHTML = "";
+        elemento.appendChild(input);
+        input.focus();
+
+        const finalizar = async () => {
+            let novoValor = parseFloat(input.value) || valorAtual;
+            await callback(novoValor);
+            elemento.innerText = sufixo === "R$" ? `R$ ${novoValor.toFixed(2)}` : `${novoValor}${sufixo}`;
+            setTimeout(() => { estaEditando = false; }, 1000);
+        };
+
+        input.onblur = finalizar;
+        input.onkeydown = (e) => { if (e.key === "Enter") input.blur(); };
+    }
+
+    document.getElementById("display-banca").ondblclick = () => {
+        let texto = document.getElementById("display-banca").innerText.replace("R$", "").trim();
+        editarValor(document.getElementById("display-banca"), parseFloat(texto), async (novo) => {
+            document.getElementById("inpBanca").value = novo;
+            await salvarTudo();
+        }, "R$");
+    };
+
+    document.getElementById("display-simulador").ondblclick = () => {
+        let texto = document.getElementById("display-simulador").innerText.replace("%", "").trim();
+        editarValor(document.getElementById("display-simulador"), parseFloat(texto), async (novo) => {
+            document.getElementById("display-simulador").innerText = novo + "%";
+        }, "%");
+    };
+
     criarMonitores();
     setInterval(sincronizar, 1000);
-
-// ====== DUPLO CLIQUE EDITÁVEL ======
-
-function editarValor(elemento, valorAtual, callback, sufixo = "") {
-    const input = document.createElement("input");
-    input.type = "number";
-    input.value = valorAtual;
-    input.style.width = "80px";
-    input.style.background = "#000";
-    input.style.color = "#fff";
-    input.style.border = "1px solid #444";
-    input.style.borderRadius = "4px";
-    input.style.textAlign = "center";
-
-    elemento.innerHTML = "";
-    elemento.appendChild(input);
-    input.focus();
-
-    input.onblur = () => {
-        let novoValor = parseFloat(input.value) || valorAtual;
-        callback(novoValor);
-        elemento.innerText = sufixo === "R$" ? `R$ ${novoValor.toFixed(2)}` : `${novoValor}${sufixo}`;
-    };
-
-    input.onkeydown = (e) => {
-        if (e.key === "Enter") input.blur();
-    };
-}
-
-// BANCA ATUAL EDITÁVEL
-document.getElementById("display-banca").ondblclick = () => {
-    let texto = document.getElementById("display-banca").innerText.replace("R$", "").trim();
-    let valor = parseFloat(texto);
-
-    editarValor(
-        document.getElementById("display-banca"),
-        valor,
-        async (novoValor) => {
-            document.getElementById("inpBanca").value = novoValor;
-            await salvarTudo();
-        },
-        "R$"
-    );
-};
-
-// SIMULADOR EDITÁVEL
-document.getElementById("display-simulador").ondblclick = () => {
-    let texto = document.getElementById("display-simulador").innerText.replace("%", "").trim();
-    let valor = parseFloat(texto);
-
-    editarValor(
-        document.getElementById("display-simulador"),
-        valor,
-        (novoValor) => {
-            document.getElementById("display-simulador").innerText = novoValor + "%";
-        },
-        "%"
-    );
-};
-
 </script>
 </body> 
 </html>
