@@ -9,52 +9,37 @@ app.use(cors());
 
 const PORT = process.env.PORT || 3000; 
 
-// --- CONFIGURAÇÕES DO BRAIN PRO INTEGRADO ---
-const HORA_INICIO = 0;
-const HORA_FIM = 23;    
+// --- CONFIGURAÇÕES DO BRAIN PRO ---
 const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI"; 
 const TG_CHAT_ID = "-1003355965894"; 
 const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
 
-let configEstrategias = { "BRAIN_PRO": true }; // Foco total na nova lógica
-let fin = { bancaInicial: 5000, bancaAtual: 5000, payout: 0.95, perdaTotal: 0 };
+let fin = { bancaInicial: 5000, bancaAtual: 5000, payout: 0.95 };
 let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0 };
-let rankingEstrategias = {}; // Será preenchido dinamicamente pelos nomes dos padrões
-
 let motores = {};
 
-// --- FUNÇÕES DE AUXÍLIO PARA MENSAGENS ---
+// --- FUNÇÃO PARA PEGAR HORÁRIOS ---
 function obterHorarios() {
     const agora = new Date();
-    const inicio = agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-    const fim = new Date(agora.getTime() + 60000).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-    return { inicio, fim };
+    const entrada = agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const proximaVela = new Date(agora.getTime() + (60 - agora.getSeconds()) * 1000);
+    const hEntrada = proximaVela.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const hFim = new Date(proximaVela.getTime() + 60000).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    
+    return { atual: entrada, entrada: hEntrada, fim: hFim };
 }
 
-function gerarTextoBase(m, status) {
-    const h = obterHorarios();
-    const winTotal = stats.winDireto + stats.winG1 + stats.winG2;
-    return `🚀 *BRAIN PRO: ${status}*\n\n` +
-           `📊 Ativo: ${m.nome}\n` +
-           `🎯 Padrão: ${m.op.est}\n` +
-           `📈 Direção: ${m.op.dir}\n\n` +
-           `⏰ Início: ${h.inicio}\n` +
-           `🏁 Fim: ${h.fim}\n\n` +
-           `🏆 Placar: ${winTotal}W | ${stats.loss}L\n` +
-           `💰 Banca: R$ ${fin.bancaAtual.toFixed(2)}`;
+// --- TELEGRAM ---
+function enviarTelegram(msg) {
+    let payload = { chat_id: TG_CHAT_ID, text: msg, parse_mode: "Markdown", 
+    reply_markup: { inline_keyboard: [[{ text: "📲 PREPARAR NA CORRETORA", url: LINK_CORRETORA }]] }};
+    fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).catch(e => console.log("Erro TG:", e.message));
 }
 
-// --- FUNÇÕES DE APOIO (LÓGICA BRAIN PRO) ---
-function getEMA(list, period = 20) {
-    if (list.length < period) return 0;
-    const k = 2 / (period + 1);
-    let ema = list[0].close;
-    for (let i = 1; i < list.length; i++) {
-        ema = (list[i].close * k) + (ema * (1 - k));
-    }
-    return ema;
-}
-
+// --- LÓGICA DE PADRÕES ---
 function analyzeCandlePatterns(list) {
     if(list.length < 5) return null;
     const last = list[list.length - 1];
@@ -64,75 +49,86 @@ function analyzeCandlePatterns(list) {
     const lowerWick = Math.min(last.open, last.close) - last.low;
     const fullSize = last.high - last.low;
 
-    // LÓGICA DE PADRÕES DO BRAIN PRO
     if (lowerWick > body * 2 && upperWick < body * 0.5) return { name: "MARTELO", dir: "CALL" };
     if (upperWick > body * 2 && lowerWick < body * 0.5) return { name: "ESTRELA", dir: "PUT" };
     if (last.close > last.open && prev.open > prev.close && last.close > prev.open) return { name: "ENGOLFO ALTA", dir: "CALL" };
     if (last.open > last.close && prev.close > prev.open && last.close < prev.open) return { name: "ENGOLFO BAIXA", dir: "PUT" };
-    if (body > fullSize * 0.8 && last.close > last.open) return { name: "FORÇA ALTA", dir: "CALL" };
-    if (body > fullSize * 0.8 && last.close < last.open) return { name: "FORÇA BAIXA", dir: "PUT" };
-
+    
     return null;
-}
-
-// --- TELEGRAM ---
-function enviarTelegram(msg) {
-    let payload = { chat_id: TG_CHAT_ID, text: msg, parse_mode: "Markdown", 
-    reply_markup: { inline_keyboard: [[{ text: "📲 ACESSAR CORRETORA", url: LINK_CORRETORA }]] }};
-    fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    }).catch(e => console.log("Erro TG:", e.message));
 }
 
 // --- MOTOR PRINCIPAL ---
 function iniciarMotor(cardId, ativoId, nomeAtivo) {
     if (motores[cardId]?.ws) motores[cardId].ws.terminate();
-    if (ativoId === "OFF") return motores[cardId] = { nome: "OFF", status: "OFF", preco: "---" };
 
     let m = {
-        nome: nomeAtivo, status: "ANALISANDO PRICE ACTION",
+        nome: nomeAtivo, alertado: false,
         ws: new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089'),
-        preco: "0.0000", history: [],
+        preco: "0.0000", history: [], historyM5: [],
         op: { ativa: false, est: "", pre: 0, t: 0, dir: "", g: 0, val: 0 }
     };
 
     m.ws.on('open', () => {
-        m.ws.send(JSON.stringify({ 
-            ticks_history: ativoId, end: "latest", count: 60, 
-            style: "candles", granularity: 60, subscribe: 1 
-        }));
+        // Solicita M1
+        m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 60, style: "candles", granularity: 60, subscribe: 1 }));
+        // Solicita M5 para validação
+        m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 5, style: "candles", granularity: 300, subscribe: 1, req_id: "validaM5" }));
     });
 
     m.ws.on('message', (data) => {
         const res = JSON.parse(data.toString());
         
-        if (res.candles) m.history = res.candles;
+        // Separa histórico de M1 e M5
+        if (res.candles && !res.req_id) m.history = res.candles;
+        if (res.candles && res.req_id === "validaM5") m.historyM5 = res.candles;
 
         if (res.ohlc) {
             const ohlc = res.ohlc;
+            
+            // Atualiza histórico M5 em tempo real se o dado for de 300s
+            if(ohlc.granularity === 300) {
+                const lastM5 = m.historyM5[m.historyM5.length - 1];
+                if(lastM5) { lastM5.close = ohlc.close; lastM5.open = ohlc.open; }
+                return; 
+            }
+
             m.preco = parseFloat(ohlc.close).toFixed(5);
             const agora = new Date();
             const s = agora.getSeconds();
-            
-            if (s === 0 && !m.op.ativa) {
-                const pattern = analyzeCandlePatterns(m.history);
-                const ema20 = getEMA(m.history, 20);
 
-                if (pattern) {
-                    let trendOk = (pattern.dir === "CALL" && ohlc.close > ema20) || 
-                                  (pattern.dir === "PUT" && ohlc.close < ema20);
+            // Validação de Tendência M5 (Vela atual de 5 min)
+            const ultimaM5 = m.historyM5[m.historyM5.length - 1];
+            const tendenciaM5 = ultimaM5 ? (ultimaM5.close >= ultimaM5.open ? "CALL" : "PUT") : null;
 
-                    if (trendOk) {
-                        disparar(m, pattern.name, pattern.dir, fin.bancaAtual * 0.01, parseFloat(ohlc.close));
-                        enviarTelegram(gerarTextoBase(m, "ENTRADA"));
-                    }
+            // --- 🔔 PRÉ-ALERTA (AOS 50 SEGUNDOS + VALIDAÇÃO M5) ---
+            if (s >= 50 && s <= 55 && !m.op.ativa && !m.alertado) {
+                const tempHistory = [...m.history, { open: ohlc.open, close: ohlc.close, high: ohlc.high, low: ohlc.low }];
+                const pattern = analyzeCandlePatterns(tempHistory);
+                
+                // Só alerta se o padrão coincidir com a cor da vela de M5
+                if (pattern && pattern.dir === tendenciaM5) {
+                    const h = obterHorarios();
+                    enviarTelegram(`🔔 *ALERTA BRAIN PRO (M5 OK)*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n📈 Direção: ${pattern.dir}\n🔍 Tendência M5: ✅\n\n⏰ *ENTRADA ÀS:* ${h.entrada}\n🕒 Faltam 10 segundos!`);
+                    m.alertado = true;
                 }
-                m.history.push({ open: ohlc.open, high: ohlc.high, low: ohlc.low, close: ohlc.close });
-                if (m.history.length > 60) m.history.shift();
+            }
+
+            // --- 🚀 ENTRADA REAL (SEGUNDO 00 + VALIDAÇÃO M5) ---
+            if (s === 0 && !m.op.ativa) {
+                m.alertado = false;
+                const pattern = analyzeCandlePatterns(m.history);
+                
+                if (pattern && pattern.dir === tendenciaM5) {
+                    const h = obterHorarios();
+                    m.op = { ativa: true, est: pattern.name, pre: parseFloat(ohlc.close), t: 60, dir: pattern.dir, g: 0, val: fin.bancaAtual * 0.01 };
+                    
+                    const winTotal = stats.winDireto + stats.winG1 + stats.winG2;
+                    enviarTelegram(`🚀 *BRAIN PRO: ENTRADA CONFIRMADA*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n📈 Direção: ${pattern.dir}\n🔍 Filtro M5: VALIDADO ✅\n\n⏰ Início: ${h.atual}\n🏁 Fim: ${h.fim}\n\n🏆 Placar: ${winTotal}W | ${stats.loss}L\n💰 Banca: R$ ${fin.bancaAtual.toFixed(2)}`);
+                }
             }
         }
 
+        // Lógica de Gale e Resultado
         if (m.op.ativa) {
             m.op.t--;
             if (m.op.t <= 0) {
@@ -140,15 +136,15 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 if (ganhou) {
                     if(m.op.g===0) stats.winDireto++; else if(m.op.g===1) stats.winG1++; else stats.winG2++;
                     fin.bancaAtual += (m.op.val * fin.payout);
-                    enviarTelegram(gerarTextoBase(m, "GREEN ✅"));
+                    enviarTelegram(`🚀 *BRAIN PRO: GREEN ✅*\n\n📊 Ativo: ${m.nome}\n💰 Banca: R$ ${fin.bancaAtual.toFixed(2)}`);
                     m.op.ativa = false;
                     stats.totalAnalises++;
                 } else if (m.op.g < 2) {
                     m.op.g++; m.op.val *= 2; m.op.t = 60; m.op.pre = m.preco;
-                    enviarTelegram(gerarTextoBase(m, `GALE ${m.op.g}`));
+                    enviarTelegram(`🚀 *BRAIN PRO: GALE ${m.op.g} ⚠️*\n\n📊 Ativo: ${m.nome}`);
                 } else {
                     stats.loss++; stats.totalAnalises++;
-                    enviarTelegram(gerarTextoBase(m, "RED ❌"));
+                    enviarTelegram(`🚀 *BRAIN PRO: RED ❌*\n\n📊 Ativo: ${m.nome}\n💰 Banca: R$ ${fin.bancaAtual.toFixed(2)}`);
                     m.op.ativa = false;
                 }
             }
@@ -157,26 +153,4 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
     motores[cardId] = m;
 }
 
-function disparar(m, est, dir, val, pre) {
-    m.op = { ativa: true, est: est, pre: pre, t: 60, dir: dir, g: 0, val: val };
-}
-
-// ENDPOINTS PARA O SEU HTML
-app.get('/status', (req, res) => {
-    res.json({
-        global: { 
-            winDireto: stats.winDireto, winGales: (stats.winG1 + stats.winG2), loss: stats.loss, 
-            precisao: stats.totalAnalises > 0 ? (((stats.winDireto+stats.winG1+stats.winG2) / stats.totalAnalises) * 100).toFixed(1) : "0.0",
-            banca: fin.bancaAtual.toFixed(2), lucro: (fin.bancaAtual - fin.bancaInicial).toFixed(2) 
-        },
-        ativos: Object.keys(motores).map(id => ({ cardId: id, nome: motores[id].nome, preco: motores[id].preco, status: motores[id].op?.ativa ? "EM OPERAÇÃO" : "BRAIN PRO: ANALISANDO" }))
-    });
-});
-
-app.post('/mudar', (req, res) => { iniciarMotor(req.body.cardId, req.body.ativoId, req.body.nomeAtivo); res.json({ success: true }); });
-app.post('/config-financeira', (req, res) => {
-    if (req.body.banca) { fin.bancaInicial = req.body.banca; fin.bancaAtual = req.body.banca; }
-    res.json({ success: true });
-});
-
-app.listen(PORT, () => console.log(`Servidor Multi-Estratégia BRAIN PRO na porta ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor Brain Pro Alerta + Filtro M5 Ativo na porta ${PORT}`));
