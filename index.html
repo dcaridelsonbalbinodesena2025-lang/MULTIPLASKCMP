@@ -24,7 +24,7 @@
         .display-stats { display: flex; justify-content: space-around; text-align: center; margin-top: 10px; }
         .display-stats div { flex: 1; }
         .display-stats span { font-size: 8px; color: #888; display: block; }
-        .display-stats b { font-size: 14px; cursor: pointer; }
+        .display-stats b { font-size: 14px; cursor: default; } /* cursor default para indicar que não é editável */
 
         .painel-central { background: #111418; border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; border: 1px solid #222; }
         .grid-estrat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
@@ -58,7 +58,10 @@
         <div class="fin-row">
             <div class="fin-input-group">
                 <label>BANCA INICIAL (R$)</label>
-                <input type="number" id="inpBanca" class="fin-input" value="5000" onfocus="estaEditando = true" onblur="estaEditando = false">
+                <input type="number" id="inpBanca" class="fin-input" value="5000" 
+                    onfocus="estaEditando = true" 
+                    onblur="estaEditando = false" 
+                    oninput="document.getElementById('display-banca').innerText = 'R$ ' + parseFloat(this.value || 0).toFixed(2)">
             </div>
             <div class="fin-input-group">
                 <label>PAYOUT (%)</label>
@@ -107,7 +110,7 @@
 
 <script>
     const URL_SERVIDOR = "https://multiplaskcmp.onrender.com";
-    let estaEditando = false; // Trava para não resetar o valor enquanto você digita
+    let estaEditando = false; 
     
     const LISTA_ATIVOS = [
         { id: "OFF", nome: "❌ DESATIVAR SLOT" },
@@ -192,7 +195,7 @@
     }
 
     async function sincronizar() {
-        if (estaEditando) return; // Se estiver digitando, não atualiza a tela
+        if (estaEditando) return; 
         try {
             const res = await fetch(`${URL_SERVIDOR}/status`);
             const d = await res.json();
@@ -213,7 +216,6 @@
         } catch (e) {}
     }
 
-    // ====== DUPLO CLIQUE EDITÁVEL CORRIGIDO ======
     function editarValor(elemento, valorAtual, callback, sufixo = "") {
         estaEditando = true;
         const input = document.createElement("input");
@@ -237,14 +239,7 @@
         input.onkeydown = (e) => { if (e.key === "Enter") input.blur(); };
     }
 
-    document.getElementById("display-banca").ondblclick = () => {
-        let texto = document.getElementById("display-banca").innerText.replace("R$", "").trim();
-        editarValor(document.getElementById("display-banca"), parseFloat(texto), async (novo) => {
-            document.getElementById("inpBanca").value = novo;
-            await salvarTudo();
-        }, "R$");
-    };
-
+    // ADICIONADO: Apenas o simulador mantém o duplo clique, a banca foi removida daqui
     document.getElementById("display-simulador").ondblclick = () => {
         let texto = document.getElementById("display-simulador").innerText.replace("%", "").trim();
         editarValor(document.getElementById("display-simulador"), parseFloat(texto), async (novo) => {
