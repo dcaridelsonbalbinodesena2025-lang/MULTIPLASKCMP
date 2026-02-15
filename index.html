@@ -24,7 +24,7 @@
         .display-stats { display: flex; justify-content: space-around; text-align: center; margin-top: 10px; }
         .display-stats div { flex: 1; }
         .display-stats span { font-size: 8px; color: #888; display: block; }
-        .display-stats b { font-size: 14px; cursor: default; } /* cursor default para indicar que não é editável */
+        .display-stats b { font-size: 14px; cursor: default; }
 
         .painel-central { background: #111418; border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; border: 1px solid #222; }
         .grid-estrat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
@@ -32,6 +32,7 @@
         .estrat-name { font-size: 9px; color: #888; margin-bottom: 5px; }
         .btn-toggle { background: var(--neon-green); color: #000; padding: 6px; font-size: 10px; font-weight: bold; border-radius: 5px; border: none; width: 100%; cursor: pointer; }
         .btn-off { background: var(--neon-red); color: #fff; }
+        .btn-config { background: var(--neon-blue); color: #fff; }
 
         .btn-salvar-grande { background: var(--neon-green); color: #000; border: none; padding: 12px; border-radius: 8px; font-weight: 900; cursor: pointer; width: 100%; margin: 15px 0; font-size: 12px; }
 
@@ -87,12 +88,12 @@
                 <button id="btn-FLUXO SNIPER" class="btn-toggle" onclick="toggleEstrat('FLUXO SNIPER')">ATIVO</button>
             </div>
             <div class="estrat-card">
-                <div class="estrat-name">FILTRO MÉDIA EMA 20</div>
-                <button id="btn-ZIGZAG FRACTAL" class="btn-toggle" onclick="toggleEstrat('ZIGZAG FRACTAL')">ATIVO</button>
+                <div class="estrat-name">CONFIGURAÇÃO EMA</div>
+                <button id="btn-ema" class="btn-toggle btn-config" onclick="alternarEma()">EMA 20</button>
             </div>
             <div class="estrat-card">
-                <div class="estrat-name">REJEIÇÃO DE PAVIO</div>
-                <button id="btn-SNIPER (RETRAÇÃO)" class="btn-toggle" onclick="toggleEstrat('SNIPER (RETRAÇÃO)')">ATIVO</button>
+                <div class="estrat-name">JUIZ DE TENDÊNCIA</div>
+                <button id="btn-tf" class="btn-toggle btn-config" onclick="alternarTf()">M5 (ATIVO)</button>
             </div>
         </div>
 
@@ -146,7 +147,7 @@
         { id: "cryETHUSD", nome: "♢ ETHEREUM (ETH)" }
     ];
 
-    let localEstatutos = { "REGRA 1": true, "FLUXO SNIPER": true, "ZIGZAG FRACTAL": true, "SNIPER (RETRAÇÃO)": true };
+    let localEstatutos = { "REGRA 1": true, "FLUXO SNIPER": true };
 
     function criarMonitores() {
         const grid = document.getElementById('grid');
@@ -165,6 +166,23 @@
         }
     }
 
+    async function alternarEma() {
+        const res = await fetch(`${URL_SERVIDOR}/alternar-ema`, { method: 'POST' });
+        const d = await res.json();
+        const btn = document.getElementById('btn-ema');
+        btn.innerText = d.novaEma === 0 ? "EMA DESATIVADA" : "EMA " + d.novaEma;
+        btn.classList.toggle('btn-off', d.novaEma === 0);
+    }
+
+    async function alternarTf() {
+        const res = await fetch(`${URL_SERVIDOR}/alternar-tf`, { method: 'POST' });
+        const d = await res.json();
+        const btn = document.getElementById('btn-tf');
+        const labels = { 300: "M5", 900: "M15", 1800: "M30", 3600: "H1", 0: "DESATIVADO" };
+        btn.innerText = labels[d.novoTf] + (d.novoTf === 0 ? "" : " (ATIVO)");
+        btn.classList.toggle('btn-off', d.novoTf === 0);
+    }
+
     async function salvarTudo() {
         const banca = parseFloat(document.getElementById('inpBanca').value);
         const payout = parseFloat(document.getElementById('inpPayout').value);
@@ -174,7 +192,6 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ banca, payout, estatutos: localEstatutos })
             });
-            console.log("Configurações enviadas ao servidor.");
         } catch (e) { console.log("Erro ao salvar."); }
     }
 
@@ -206,6 +223,10 @@
             document.getElementById('g-loss').innerText = d.global.loss;
             document.getElementById('g-precisao').innerText = d.global.precisao + "%";
             
+            // Atualiza botões se mudou no servidor
+            document.getElementById('btn-ema').innerText = d.global.ema === 0 ? "EMA DESATIVADA" : "EMA " + d.global.ema;
+            document.getElementById('btn-ema').classList.toggle('btn-off', d.global.ema === 0);
+
             d.ativos.forEach(a => {
                 if(document.getElementById(`price-${a.cardId}`)) {
                     document.getElementById(`price-${a.cardId}`).innerText = a.preco;
@@ -215,37 +236,6 @@
             });
         } catch (e) {}
     }
-
-    function editarValor(elemento, valorAtual, callback, sufixo = "") {
-        estaEditando = true;
-        const input = document.createElement("input");
-        input.type = "number";
-        input.value = valorAtual;
-        input.className = "fin-input";
-        input.style.width = "100px";
-
-        elemento.innerHTML = "";
-        elemento.appendChild(input);
-        input.focus();
-
-        const finalizar = async () => {
-            let novoValor = parseFloat(input.value) || valorAtual;
-            await callback(novoValor);
-            elemento.innerText = sufixo === "R$" ? `R$ ${novoValor.toFixed(2)}` : `${novoValor}${sufixo}`;
-            setTimeout(() => { estaEditando = false; }, 1000);
-        };
-
-        input.onblur = finalizar;
-        input.onkeydown = (e) => { if (e.key === "Enter") input.blur(); };
-    }
-
-    // ADICIONADO: Apenas o simulador mantém o duplo clique, a banca foi removida daqui
-    document.getElementById("display-simulador").ondblclick = () => {
-        let texto = document.getElementById("display-simulador").innerText.replace("%", "").trim();
-        editarValor(document.getElementById("display-simulador"), parseFloat(texto), async (novo) => {
-            document.getElementById("display-simulador").innerText = novo + "%";
-        }, "%");
-    };
 
     criarMonitores();
     setInterval(sincronizar, 1000);
