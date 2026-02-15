@@ -41,17 +41,17 @@ function gerarTextoBase(m, status, extra = "") {
     
     let msg = `🚀 *BRAIN PRO: ${status}*\n\n`;
     
-    // 1ª COISA: Adiciona o "Clique agora!" acima de Ativo se for Entrada ou Gale
+    // 1ª COISA: Adicionar "👉Clique agora!" acima de Ativo em entradas e gales
     if (status.includes("ENTRADA") || status.includes("GALE")) {
         msg += `👉Clique agora!\n`;
     }
-    
+
     msg += `📊 Ativo: ${m.nome}\n` +
            `🎯 Padrão: ${m.op.est}\n` +
            `📈 Direção: ${m.op.dir}\n\n` +
            `${extra}`;
-           
-    // 2ª COISA: Remove horários APENAS se for Green ou Red. Mantém em Entrada e Gale.
+    
+    // 2ª COISA: Mostrar horários apenas se NÃO for GREEN ou RED
     if (!status.includes("GREEN") && !status.includes("RED")) {
         msg += `⏰ Início: ${h.inicio}\n` +
                `🏁 Fim: ${h.fim}\n\n`;
@@ -153,13 +153,14 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             const tendM5 = uM5 ? (uM5.close >= uM5.open ? "CALL" : "PUT") : null;
             const ema20 = getEMA(m.history, 20);
 
-            // 3ª COISA: ALERTA com horário dinâmico
+            // 3ª COISA: Alerta com possível horário de entrada
             if (s >= 50 && s <= 55 && !m.op.ativa && !m.alertado) {
                 const p = analyzeCandlePatterns([...m.history, { open: ohlc.open, close: ohlc.close, high: ohlc.high, low: ohlc.low }]);
                 const emaOk = p ? (p.dir === "CALL" ? ohlc.close > ema20 : ohlc.close < ema20) : false;
                 if (p && p.dir === tendM5 && emaOk) {
-                    const hProx = new Date(new Date().getTime() + (60 - s) * 1000).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-                    enviarTelegram(`🔔 *ALERTA BRAIN PRO*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${p.name}\n📈 Direção: ${p.dir}\n🔍 M5+EMA 20: ✅\n\n🕓 Possível entrada as: ${hProx}`);
+                    const agora = new Date();
+                    const proximoMinuto = new Date(agora.getTime() + (60 - s) * 1000).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+                    enviarTelegram(`🔔 *ALERTA BRAIN PRO*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${p.name}\n📈 Direção: ${p.dir}\n🔍 M5+EMA 20: ✅\n\n🕓 Possível entrada as: ${proximoMinuto}`);
                     m.alertado = true;
                 }
             }
