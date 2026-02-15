@@ -115,17 +115,17 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             m.preco = parseFloat(ohlc.close).toFixed(5);
             const s = new Date().getSeconds();
 
-            // MENSAGEM 1: ALERTA
+            // MENSAGEM 1: ALERTA (SEM O CLIQUE AGORA)
             if (s >= 50 && s <= 55 && !m.op.ativa && !m.alertado) {
                 const pattern = analyzeCandlePatterns([...m.history, { open: ohlc.open, close: ohlc.close, high: ohlc.high, low: ohlc.low }]);
                 if (pattern) {
                     const hPrevisao = new Date(new Date().getTime() + (60 - s) * 1000).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-                    enviarTelegram(`⚠️ *ALERTA BRAIN PRO*\n\n👉Clique agora!\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n📈 Filtro: PADRÃO PURO ✅\n🕓 Possível horário de entrada: ${hPrevisao}`);
+                    enviarTelegram(`⚠️ *ALERTA BRAIN PRO*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n📈 Filtro: PADRÃO PURO ✅\n🕓 Possível horário de entrada: ${hPrevisao}`);
                     m.alertado = true;
                 }
             }
 
-            // MENSAGEM 2: ENTRADA
+            // MENSAGEM 2: ENTRADA (COM O CLIQUE AGORA)
             if (s === 0 && !m.op.ativa) {
                 m.alertado = false;
                 const pattern = analyzeCandlePatterns(m.history);
