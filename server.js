@@ -82,8 +82,11 @@ function analyzeCandlePatterns(list) {
     const upperWick = last.high - Math.max(last.open, last.close);
     const lowerWick = Math.min(last.open, last.close) - last.low;
 
-    if (lowerWick > body * 2 && upperWick < body * 0.5) return { name: "MARTELO", dir: "CALL" };
-    if (upperWick > body * 2 && lowerWick < body * 0.5) return { name: "ESTRELA", dir: "PUT" };
+    // Lógica de Suporte simplificada (preço atual abaixo da média das últimas 5 velas)
+    const avgPrice = list.slice(-5).reduce((acc, c) => acc + c.close, 0) / 5;
+    const isSupport = last.close <= avgPrice;
+
+    if (lowerWick > body * 2 && upperWick < body * 0.5 && isSupport) return { name: "MARTELO", dir: "CALL" };
     if (last.close > last.open && prev.open > prev.close && last.close > prev.open) return { name: "ENGOLFO ALTA", dir: "CALL" };
     if (last.open > last.close && prev.close > prev.open && last.close < prev.open) return { name: "ENGOLFO BAIXA", dir: "PUT" };
     return null;
@@ -120,34 +123,29 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
             m.preco = parseFloat(ohlc.close).toFixed(5);
             const s = new Date().getSeconds();
-            const uM5 = m.historyM5[m.historyM5.length - 1];
-            const tendM5 = uM5 ? (uM5.close >= uM5.open ? "CALL" : "PUT") : null;
-            const ema20 = getEMA(m.history, 20);
 
-            // ALERTA COM FILTRO (MENSAGEM 1)
+            // ALERTA (MENSAGEM 1) - SEM FILTROS EMA/M5
             if (s >= 50 && s <= 55 && !m.op.ativa && !m.alertado) {
                 const pattern = analyzeCandlePatterns([...m.history, { open: ohlc.open, close: ohlc.close, high: ohlc.high, low: ohlc.low }]);
-                const emaOk = pattern ? (pattern.dir === "CALL" ? ohlc.close > ema20 : ohlc.close < ema20) : false;
-                if (pattern && pattern.dir === tendM5 && emaOk) {
+                if (pattern) {
                     const hPrevisao = new Date(new Date().getTime() + (60 - s) * 1000).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-                    enviarTelegram(`⚠️ *ALERTA BRAIN PRO*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n📈 Filtro M5+EMA: ✅\n🕓 Possível horário de entrada: ${hPrevisao}`);
+                    enviarTelegram(`⚠️ *ALERTA BRAIN PRO*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n📈 Filtro: PADRÃO PURO ✅\n🕓 Possível horário de entrada: ${hPrevisao}`);
                     m.alertado = true;
                 }
             }
 
-            // ENTRADA COM FILTRO (MENSAGEM 2)
+            // ENTRADA (MENSAGEM 2) - SEM FILTROS EMA/M5
             if (s === 0 && !m.op.ativa) {
                 m.alertado = false;
                 const pattern = analyzeCandlePatterns(m.history);
-                const emaOk = pattern ? (pattern.dir === "CALL" ? m.history[m.history.length-1].close > ema20 : m.history[m.history.length-1].close < ema20) : false;
-                if (pattern && pattern.dir === tendM5 && emaOk) {
+                if (pattern) {
                     let valorEntrada = fin.bancaInicial * fin.percentual;
-                    if(fin.bancaAtual >= valorEntrada){
-                        fin.bancaAtual -= valorEntrada;
-                        m.op = { ativa: true, est: pattern.name, pre: parseFloat(ohlc.close), t: 60, dir: pattern.dir, g: 0, val: valorEntrada };
-                        const h = obterHorarios();
-                        enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Valor: R$ ${valorEntrada.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
-                    }
+                    if(valorEntrada <= 0) valorEntrada = 2.00; 
+
+                    fin.bancaAtual -= valorEntrada;
+                    m.op = { ativa: true, est: pattern.name, pre: parseFloat(ohlc.close), t: 60, dir: pattern.dir, g: 0, val: valorEntrada };
+                    const h = obterHorarios();
+                    enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Valor: R$ ${valorEntrada.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
                 }
             }
         }
@@ -156,27 +154,18 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             m.op.t--;
             if (m.op.t <= 0) {
                 let ganhou = (m.op.dir === "CALL" && parseFloat(m.preco) > m.op.pre) || (m.op.dir === "PUT" && parseFloat(m.preco) < m.op.pre);
-                const totalG = stats.winDireto + stats.winG1 + stats.winG2;
                 
                 if (ganhou) {
                     if(m.op.g===0) stats.winDireto++; else if(m.op.g===1) stats.winG1++; else stats.winG2++;
                     fin.bancaAtual += m.op.val + (m.op.val * fin.payout);
-                    // MENSAGEM 3 (GREEN)
                     enviarTelegram(`✅ *STATUS: GREEN*\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Valor: R$ ${m.op.val.toFixed(2)}\n🔥 PLACAR: GREEN: ${stats.winDireto + stats.winG1 + stats.winG2} : RED: ${stats.loss}`);
                     m.op.ativa = false;
                 } else if (m.op.g < 2) {
                     m.op.g++; m.op.val *= 2;
-                    if(fin.bancaAtual >= m.op.val){
-                        fin.bancaAtual -= m.op.val;
-                        m.op.t = 60; m.op.pre = parseFloat(m.preco);
-                        const h = obterHorarios();
-                        // MENSAGEM 4 (GALE)
-                        enviarTelegram(`⚠️ *Gale ${m.op.g}*\n👉Clique agora!\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Valor: R$ ${m.op.val.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
-                    } else {
-                        stats.loss++; 
-                        enviarTelegram(`❌ *STATUS: RED (SALDO BAIXO)*\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Valor: R$ ${m.op.val.toFixed(2)}\n🔥 PLACAR: GREEN: ${stats.winDireto + stats.winG1 + stats.winG2} : RED: ${stats.loss}`);
-                        m.op.ativa = false;
-                    }
+                    fin.bancaAtual -= m.op.val;
+                    m.op.t = 60; m.op.pre = parseFloat(m.preco);
+                    const h = obterHorarios();
+                    enviarTelegram(`⚠️ *Gale ${m.op.g}*\n👉Clique agora!\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Valor: R$ ${m.op.val.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
                 } else {
                     stats.loss++; 
                     enviarTelegram(`❌ *STATUS: RED*\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Valor: R$ ${m.op.val.toFixed(2)}\n🔥 PLACAR: GREEN: ${stats.winDireto + stats.winG1 + stats.winG2} : RED: ${stats.loss}`);
