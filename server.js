@@ -19,7 +19,7 @@ let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0 };
 let motores = {};
 
 // --- AUXILIARES TÉCNICOS ---
-function getEMA(list, period = 20) {
+function getEMA(list, period) {
     if (list.length < period) return 0;
     const k = 2 / (period + 1);
     let ema = list[0].close;
@@ -103,34 +103,69 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
     };
 
     m.ws.on('open', () => {
-        m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 60, style: "candles", granularity: 60, subscribe: 1 }));
+        m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 100, style: "candles", granularity: 60, subscribe: 1 }));
+        
+        // ===========================================================================
+        // --- AQUI VOCÊ MUDA O PERÍODO DO JUIZ DE TENDÊNCIA (M5, M15, M1...) ---
+        // granularity: 60 (M1), 300 (M5), 900 (M15), 3600 (H1)
+        // ===========================================================================
+        m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 10, style: "candles", granularity: 300, subscribe: 1, req_id: "validaM5" }));
     });
 
     m.ws.on('message', (data) => {
         const res = JSON.parse(data.toString());
-        if (res.candles) m.history = res.candles;
+        if (res.candles && !res.req_id) m.history = res.candles;
+        if (res.candles && res.req_id === "validaM5") m.historyM5 = res.candles;
 
         if (res.ohlc) {
             const ohlc = res.ohlc;
+            
+            // Sincroniza o fechamento da vela do juiz (M5)
+            if(ohlc.granularity === 300) { 
+                const lastM5 = m.historyM5[m.historyM5.length - 1];
+                if(lastM5) { lastM5.close = ohlc.close; lastM5.open = ohlc.open; }
+                return; 
+            }
+
             m.preco = parseFloat(ohlc.close).toFixed(5);
             const s = new Date().getSeconds();
 
-            // MENSAGEM: ALERTA (Texto reduzido e filtro puro)
+            // ===========================================================================
+            // --- AQUI VOCÊ MUDA O PERÍODO DA EMA (10, 20, 50, 100, 200) ---
+            // Exemplos: 10 (Rápida), 20 (Padrão), 100/200 (Tendência Forte)
+            // ===========================================================================
+            const PERIODO_EMA = 10; 
+            const emaValue = getEMA(m.history, PERIODO_EMA);
+            
+            const uM5 = m.historyM5[m.historyM5.length - 1];
+            const tendM5 = uM5 ? (uM5.close >= uM5.open ? "CALL" : "PUT") : null;
+            // ===========================================================================
+
+            // MENSAGEM: ALERTA (Com validação dos Juízes)
             if (s >= 50 && s <= 55 && !m.op.ativa && !m.alertado) {
                 const pattern = analyzeCandlePatterns([...m.history, { open: ohlc.open, close: ohlc.close, high: ohlc.high, low: ohlc.low }]);
-                if (pattern) {
+                
+                // Validação: Padrão a favor da EMA e a favor da tendência M5
+                const emaOk = pattern ? (pattern.dir === "CALL" ? ohlc.close > emaValue : ohlc.close < emaValue) : false;
+                const m5Ok = pattern ? (pattern.dir === tendM5) : false;
+
+                if (pattern && emaOk && m5Ok) {
                     const hPrevisao = new Date(new Date().getTime() + (60 - s) * 1000).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-                    enviarTelegram(`⚠️ *ALERTA BRAIN PRO*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n📈 Filtro: PADRÃO PURO ✅\n🕓 Possível entrada: ${hPrevisao}`);
+                    enviarTelegram(`⚠️ *ALERTA BRAIN PRO*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n📈 Filtro: EMA${PERIODO_EMA}+M5 ✅\n🕓 Possível entrada: ${hPrevisao}`);
                     m.alertado = true;
                 }
             }
 
-            // MENSAGEM: ENTRADA (Com Clique agora, Saldo e Entrada baseada no %)
+            // MENSAGEM: ENTRADA (Validada pelos Juízes)
             if (s === 0 && !m.op.ativa) {
                 m.alertado = false;
                 const pattern = analyzeCandlePatterns(m.history);
-                if (pattern) {
-                    let valorEntrada = fin.bancaAtual * fin.percentual; // Cálculo em cima da banca atual conforme solicitado
+                
+                const emaOk = pattern ? (m.history[m.history.length-1].close > emaValue ? "CALL" : "PUT") === pattern.dir : false;
+                const m5Ok = pattern ? (pattern.dir === tendM5) : false;
+
+                if (pattern && emaOk && m5Ok) {
+                    let valorEntrada = fin.bancaAtual * fin.percentual;
                     if(valorEntrada <= 0) valorEntrada = 2.00; 
 
                     fin.bancaAtual -= valorEntrada;
