@@ -19,8 +19,8 @@ let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0 };
 let motores = {};
 
 // --- CONTROLES DE FILTROS DINÂMICOS ---
-const OPCOES_EMA = [10, 20, 50, 100, 200, 0]; // 0 = OFF
-const OPCOES_TF = [300, 900, 1800, 3600, 0];  // Segundos (300=M5, 0=OFF)
+const OPCOES_EMA = [10, 20, 50, 100, 200, 0]; 
+const OPCOES_TF = [300, 900, 1800, 3600, 0];  
 let emaConfig = 20; 
 let tfConfig = 300; 
 
@@ -52,7 +52,6 @@ app.post('/config-financeira', (req, res) => {
     res.json({ success: true, fin });
 });
 
-// NOVAS ROTAS PARA OS BOTÕES
 app.post('/alternar-ema', (req, res) => {
     let idx = OPCOES_EMA.indexOf(emaConfig);
     emaConfig = OPCOES_EMA[(idx + 1) % OPCOES_EMA.length];
@@ -69,19 +68,16 @@ app.get('/status', (req, res) => {
     const lucroReal = fin.bancaInicial > 0 ? (fin.bancaAtual - fin.bancaInicial) : 0;
     const totalWins = stats.winDireto + stats.winG1 + stats.winG2;
     const totalOps = totalWins + stats.loss;
-    
     res.json({
         global: { 
             winDireto: stats.winDireto, winGales: (stats.winG1 + stats.winG2), loss: stats.loss, 
             banca: fin.bancaAtual.toFixed(2), lucro: lucroReal.toFixed(2), 
             precisao: (totalOps > 0 ? (totalWins / totalOps * 100) : 0).toFixed(1),
-            ema: emaConfig,
-            tf: tfConfig
+            ema: emaConfig, tf: tfConfig
         },
         ativos: Object.keys(motores).map(id => ({
             cardId: id, nome: motores[id].nome, preco: motores[id].preco, 
-            status: motores[id].op.ativa ? "OPERANDO" : "ANALISANDO",
-            forca: motores[id].forca || 50
+            status: motores[id].op.ativa ? "OPERANDO" : "ANALISANDO"
         }))
     });
 });
@@ -125,7 +121,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
 
     m.ws.on('open', () => {
         m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 100, style: "candles", granularity: 60, subscribe: 1 }));
-        m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 10, style: "candles", granularity: 3600, subscribe: 1, req_id: "validaM5" }));
+        m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 10, style: "candles", granularity: tfConfig || 300, subscribe: 1, req_id: "validaM5" }));
     });
 
     m.ws.on('message', (data) => {
@@ -144,15 +140,13 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             m.preco = parseFloat(ohlc.close).toFixed(5);
             const s = new Date().getSeconds();
 
-            // FILTROS DINÂMICOS
             const emaValue = emaConfig > 0 ? getEMA(m.history, emaConfig) : 0;
             const uM5 = m.historyM5[m.historyM5.length - 1];
             const tendM5 = uM5 ? (uM5.close >= uM5.open ? "CALL" : "PUT") : null;
 
-            // MENSAGEM: ALERTA
+            // ALERTA (50-55s)
             if (s >= 50 && s <= 55 && !m.op.ativa && !m.alertado) {
                 const pattern = analyzeCandlePatterns([...m.history, { open: ohlc.open, close: ohlc.close, high: ohlc.high, low: ohlc.low }]);
-                
                 const emaOk = emaConfig === 0 ? true : (pattern ? (pattern.dir === "CALL" ? ohlc.close > emaValue : ohlc.close < emaValue) : false);
                 const m5Ok = tfConfig === 0 ? true : (pattern ? (pattern.dir === tendM5) : false);
 
@@ -163,18 +157,16 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 }
             }
 
-            // MENSAGEM: ENTRADA
+            // ENTRADA (0s)
             if (s === 0 && !m.op.ativa) {
                 m.alertado = false;
                 const pattern = analyzeCandlePatterns(m.history);
-                
                 const emaOk = emaConfig === 0 ? true : (pattern ? (m.history[m.history.length-1].close > emaValue ? "CALL" : "PUT") === pattern.dir : false);
                 const m5Ok = tfConfig === 0 ? true : (pattern ? (pattern.dir === tendM5) : false);
 
                 if (pattern && emaOk && m5Ok) {
                     let valorEntrada = fin.bancaAtual * fin.percentual;
                     if(valorEntrada <= 0) valorEntrada = 2.00; 
-
                     fin.bancaAtual -= valorEntrada;
                     m.op = { ativa: true, est: pattern.name, pre: parseFloat(ohlc.close), t: 60, dir: pattern.dir, g: 0, val: valorEntrada };
                     const h = obterHorarios();
@@ -194,18 +186,30 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                     fin.bancaAtual += m.op.val + (m.op.val * fin.payout);
                     enviarTelegram(`✅ *STATUS: GREEN*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Banca Atual: R$ ${fin.bancaAtual.toFixed(2)}\n🔥 PLACAR: ${placarStr}`);
                     m.op.ativa = false;
-                } else if (m.op.g < 2) {
-                    m.op.g++; 
-                    let novoValorGale = m.op.val * 2;
-                    fin.bancaAtual -= novoValorGale;
-                    m.op.val = novoValorGale;
-                    m.op.t = 60; m.op.pre = parseFloat(m.preco);
-                    const h = obterHorarios();
-                    enviarTelegram(`⚠️ *GALE ${m.op.g}*\n\n👉Clique agora!\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Entrada: R$ ${m.op.val.toFixed(2)}\n💰 Banca atual: R$ ${fin.bancaAtual.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
                 } else {
-                    stats.loss++; 
-                    enviarTelegram(`❌ *STATUS: RED*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Banca Atual: R$ ${fin.bancaAtual.toFixed(2)}\n🔥 PLACAR: ${placarStr}`);
-                    m.op.ativa = false;
+                    // --- LÓGICA DE ABORTO DE GALE (Inteligência Ultimate) ---
+                    const lastC = m.history[m.history.length-1];
+                    const emaV = getEMA(m.history, 20);
+                    const rompeuMedia = (m.op.dir === "CALL" && lastC.close < emaV) || (m.op.dir === "PUT" && lastC.close > emaV);
+                    
+                    if (rompeuMedia && m.op.g < 2) {
+                        stats.loss++;
+                        enviarTelegram(`🛡️ *GALE ABORTADO (SEGURANÇA)*\n\n📊 Ativo: ${m.nome}\n⚠️ Motivo: Rompimento de Média móvel contra a operação.\n❌ Aceitando Loss para proteger o capital.\n💰 Banca: R$ ${fin.bancaAtual.toFixed(2)}`);
+                        m.op.ativa = false;
+                    } else if (m.op.g < 2) {
+                        // Se não rompeu a média, continua para o Gale
+                        m.op.g++; 
+                        let novoValorGale = m.op.val * 2;
+                        fin.bancaAtual -= novoValorGale;
+                        m.op.val = novoValorGale;
+                        m.op.t = 60; m.op.pre = parseFloat(m.preco);
+                        const h = obterHorarios();
+                        enviarTelegram(`⚠️ *GALE ${m.op.g}*\n\n👉Clique agora!\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Entrada: R$ ${m.op.val.toFixed(2)}\n💰 Banca atual: R$ ${fin.bancaAtual.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
+                    } else {
+                        stats.loss++; 
+                        enviarTelegram(`❌ *STATUS: RED*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Banca Atual: R$ ${fin.bancaAtual.toFixed(2)}\n🔥 PLACAR: ${placarStr}`);
+                        m.op.ativa = false;
+                    }
                 }
             }
         }
@@ -213,9 +217,5 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
     motores[cardId] = m;
 }
 
-app.post('/mudar', (req, res) => { 
-    iniciarMotor(req.body.cardId, req.body.ativoId, req.body.nomeAtivo); 
-    res.json({ success: true }); 
-});
-
-app.listen(PORT, () => console.log(`BRAIN PRO RODANDO NA PORTA ${PORT}`));
+app.post('/mudar', (req, res) => { iniciarMotor(req.body.cardId, req.body.ativoId, req.body.nomeAtivo); res.json({ success: true }); });
+app.listen(PORT, () => console.log(`BRAIN PRO COM ABORTO DE GALE RODANDO NA PORTA ${PORT}`));
