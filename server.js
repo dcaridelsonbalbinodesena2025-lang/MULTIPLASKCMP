@@ -9,147 +9,232 @@ app.use(cors());
 
 const PORT = process.env.PORT || 3000; 
 
-// --- CONFIGURAÇÕES (Verifique se o Token e ChatID estão corretos) ---
+// --- CONFIGURAÇÕES ---
 const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI"; 
 const TG_CHAT_ID = "-1003355965894"; 
 const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
 
-// AJUSTE: Banca inicial não pode ser 0
-let fin = { bancaInicial: 1000, bancaAtual: 1000, payout: 0.85, percentual: 0.01 }; 
-let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0 };
+let fin = { bancaInicial: 0, bancaAtual: 0, payout: 0.95, percentual: 0.01 }; 
+let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0 };
 let motores = {};
 
-let emaConfig = 20;  
-let tfConfig = 300;  
+// --- CONTROLES DE FILTROS DINÂMICOS ---
+const OPCOES_EMA = [10, 20, 50, 100, 200, 0]; // 0 = OFF
+const OPCOES_TF = [300, 900, 1800, 3600, 0];  // Segundos (300=M5, 0=OFF)
+let emaConfig = 20; 
+let tfConfig = 300; 
 
-const OPCOES_EMA = [10, 20, 50, 100, 200, 300]; 
-const OPCOES_TF = [60, 300, 900, 1800, 3600];
-
-// --- FUNÇÕES TÉCNICAS ---
+// --- AUXILIARES TÉCNICOS ---
 function getEMA(list, period) {
-    if (!list || list.length < period) return 0;
+    if (list.length < period) return 0;
     const k = 2 / (period + 1);
-    let ema = parseFloat(list[0].close);
-    for (let i = 1; i < list.length; i++) { 
-        ema = (parseFloat(list[i].close) * k) + (ema * (1 - k)); 
-    }
+    let ema = list[0].close;
+    for (let i = 1; i < list.length; i++) { ema = (list[i].close * k) + (ema * (1 - k)); }
     return ema;
 }
 
-function analyzeUltimatePatterns(list) {
-    if(!list || list.length < 20) return null;
+function obterHorarios() {
+    const agora = new Date();
+    const inicio = agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const fim = new Date(agora.getTime() + 60000).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    return { inicio, fim };
+}
+
+// --- ROTAS DE CONFIGURAÇÃO ---
+app.post('/config-financeira', (req, res) => {
+    const { banca, payout } = req.body;
+    if (banca !== undefined) {
+        fin.bancaInicial = Number(banca);
+        fin.bancaAtual = Number(banca); 
+        console.log(`>>> SALVANDO: Banca R$ ${fin.bancaInicial}`);
+    }
+    if (payout !== undefined) fin.payout = Number(payout) / 100;
+    res.json({ success: true, fin });
+});
+
+// NOVAS ROTAS PARA OS BOTÕES
+app.post('/alternar-ema', (req, res) => {
+    let idx = OPCOES_EMA.indexOf(emaConfig);
+    emaConfig = OPCOES_EMA[(idx + 1) % OPCOES_EMA.length];
+    res.json({ novaEma: emaConfig });
+});
+
+app.post('/alternar-tf', (req, res) => {
+    let idx = OPCOES_TF.indexOf(tfConfig);
+    tfConfig = OPCOES_TF[(idx + 1) % OPCOES_TF.length];
+    res.json({ novoTf: tfConfig });
+});
+
+app.get('/status', (req, res) => {
+    const lucroReal = fin.bancaInicial > 0 ? (fin.bancaAtual - fin.bancaInicial) : 0;
+    const totalWins = stats.winDireto + stats.winG1 + stats.winG2;
+    const totalOps = totalWins + stats.loss;
     
+    res.json({
+        global: { 
+            winDireto: stats.winDireto, winGales: (stats.winG1 + stats.winG2), loss: stats.loss, 
+            banca: fin.bancaAtual.toFixed(2), lucro: lucroReal.toFixed(2), 
+            precisao: (totalOps > 0 ? (totalWins / totalOps * 100) : 0).toFixed(1),
+            ema: emaConfig,
+            tf: tfConfig
+        },
+        ativos: Object.keys(motores).map(id => ({
+            cardId: id, nome: motores[id].nome, preco: motores[id].preco, 
+            status: motores[id].op.ativa ? "OPERANDO" : "ANALISANDO",
+            forca: motores[id].forca || 50
+        }))
+    });
+});
+
+function enviarTelegram(msg) {
+    let payload = { chat_id: TG_CHAT_ID, text: msg, parse_mode: "Markdown", 
+    reply_markup: { inline_keyboard: [[{ text: "📲 PREPARAR NA CORRETORA", url: LINK_CORRETORA }]] }};
+    fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).catch(e => {});
+}
+
+// --- LÓGICA OPERACIONAL ULTIMATE (CÉREBRO) ---
+function analyzeCandlePatterns(list) {
+    if(list.length < 20) return null;
     const last = list[list.length - 1];
     const prev = list[list.length - 2];
     const body = Math.abs(last.close - last.open);
     const upperWick = last.high - Math.max(last.open, last.close);
     const lowerWick = Math.min(last.open, last.close) - last.low;
-    
-    // Filtro de Volume (70% da média)
-    const volAvg = list.slice(-10).reduce((a, b) => a + (b.high - b.low), 0) / 10;
-    const volCheck = (last.high - last.low) >= (volAvg * 0.7);
 
-    // Suporte e Resistência (Simplificado para Backend)
+    // FILTRO DE VOLUME ULTIMATE (Média das últimas 10 velas)
+    const volAvg = list.slice(-10).reduce((acc, c) => acc + (c.high - c.low), 0) / 10;
+    if ((last.high - last.low) < (volAvg * 0.7)) return null; 
+
+    // MAPEAMENTO S/R
     const recent = list.slice(-50);
-    const resistances = recent.map(c => c.high).sort((a,b) => b-a).slice(0, 3);
     const supports = recent.map(c => c.low).sort((a,b) => a-b).slice(0, 3);
+    const resistances = recent.map(c => c.high).sort((a,b) => b-a).slice(0, 3);
+    const margem = (last.high - last.low) * 0.3;
+
+    const noSuporte = supports.some(s => Math.abs(last.low - s) <= margem);
+    const naResistencia = resistances.some(r => Math.abs(last.high - r) <= margem);
+
+    // GATILHOS VIP
+    if (lowerWick > body * 2 && noSuporte) return { name: "MARTELO VIP", dir: "CALL" };
+    if (upperWick > body * 2 && naResistencia) return { name: "ESTRELA VIP", dir: "PUT" };
+    if (last.close > last.open && prev.open > prev.close && last.close > prev.open && noSuporte) return { name: "🔥 ENGOLFO VIP", dir: "CALL" };
+    if (last.open > last.close && prev.close > prev.open && last.close < prev.open && naResistencia) return { name: "🔥 ENGOLFO VIP", dir: "PUT" };
     
-    const margemSR = (last.high - last.low) * 0.3;
-    const noSuporte = supports.some(sup => Math.abs(last.low - sup) <= margemSR);
-    const naResistencia = resistances.some(res => Math.abs(last.high - res) <= margemSR);
-
-    if (!volCheck) return null;
-
-    // Engolfo de Baixa + Resistência
-    if (last.open > last.close && prev.close > prev.open && last.close < prev.open && naResistencia) 
-        return { name: "🔥 ENGOLFO DE BAIXA VIP", dir: "PUT" };
-    
-    // Engolfo de Alta + Suporte
-    if (last.close > last.open && prev.open > prev.close && last.close > prev.open && noSuporte) 
-        return { name: "🔥 ENGOLFO DE ALTA VIP", dir: "CALL" };
-
     return null;
 }
 
 // --- MOTOR DE OPERAÇÕES ---
 function iniciarMotor(cardId, ativoId, nomeAtivo) {
     if (motores[cardId]?.ws) motores[cardId].ws.terminate();
-    
-    console.log(`> Iniciando monitoramento: ${nomeAtivo} (${ativoId})`);
+    if (ativoId === "OFF") return;
 
     let m = {
-        nome: nomeAtivo, ativoId: ativoId, alertado: false, history: [], historyMacro: [],
+        nome: nomeAtivo, alertado: false, history: [], historyM5: [],
         ws: new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089'),
         preco: "0.0000", op: { ativa: false, est: "", pre: 0, t: 0, dir: "", g: 0, val: 0 }
     };
 
     m.ws.on('open', () => {
         m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 100, style: "candles", granularity: 60, subscribe: 1 }));
-        m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 50, style: "candles", granularity: tfConfig, subscribe: 1, req_id: "macro" }));
+        m.ws.send(JSON.stringify({ ticks_history: ativoId, end: "latest", count: 10, style: "candles", granularity: 3600, subscribe: 1, req_id: "validaM5" }));
     });
 
     m.ws.on('message', (data) => {
         const res = JSON.parse(data.toString());
-        
         if (res.candles && !res.req_id) m.history = res.candles;
-        if (res.candles && res.req_id === "macro") m.historyMacro = res.candles;
+        if (res.candles && res.req_id === "validaM5") m.historyM5 = res.candles;
 
         if (res.ohlc) {
             const ohlc = res.ohlc;
-            if (ohlc.granularity === tfConfig) return; // Ignora atualização do macro aqui
+            if(ohlc.granularity > 60) { 
+                const lastM5 = m.historyM5[m.historyM5.length - 1];
+                if(lastM5) { lastM5.close = ohlc.close; lastM5.open = ohlc.open; }
+                return; 
+            }
 
-            m.preco = parseFloat(ohlc.close);
+            m.preco = parseFloat(ohlc.close).toFixed(5);
             const s = new Date().getSeconds();
 
-            const emaValue = getEMA(m.history, emaConfig);
-            const uMacro = m.historyMacro[m.historyMacro.length - 1];
-            const tendMacro = uMacro ? (uMacro.close >= uMacro.open ? "CALL" : "PUT") : null;
+            const emaValue = emaConfig > 0 ? getEMA(m.history, emaConfig) : 0;
+            const uM5 = m.historyM5[m.historyM5.length - 1];
+            const tendM5 = uM5 ? (uM5.close >= uM5.open ? "CALL" : "PUT") : null;
 
-            // Lógica de Entrada no Segundo 0
+            if (s >= 50 && s <= 55 && !m.op.ativa && !m.alertado) {
+                const pattern = analyzeCandlePatterns([...m.history, { open: ohlc.open, close: ohlc.close, high: ohlc.high, low: ohlc.low }]);
+                const emaOk = emaConfig === 0 ? true : (pattern ? (pattern.dir === "CALL" ? ohlc.close > emaValue : ohlc.close < emaValue) : false);
+                const m5Ok = tfConfig === 0 ? true : (pattern ? (pattern.dir === tendM5) : false);
+
+                if (pattern && emaOk && m5Ok) {
+                    const hPrevisao = new Date(new Date().getTime() + (60 - s) * 1000).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+                    enviarTelegram(`⚠️ *ALERTA BRAIN PRO*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${pattern.name}\n📈 Filtro: EMA${emaConfig}+TF ✅\n🕓 Possível entrada: ${hPrevisao}`);
+                    m.alertado = true;
+                }
+            }
+
             if (s === 0 && !m.op.ativa) {
-                const pattern = analyzeUltimatePatterns(m.history);
-                if (pattern) {
-                    const emaOk = (pattern.dir === "CALL" ? m.preco > emaValue : m.preco < emaValue);
-                    const macroOk = (pattern.dir === tendMacro);
+                m.alertado = false;
+                const pattern = analyzeCandlePatterns(m.history);
+                const emaOk = emaConfig === 0 ? true : (pattern ? (m.history[m.history.length-1].close > emaValue ? "CALL" : "PUT") === pattern.dir : false);
+                const m5Ok = tfConfig === 0 ? true : (pattern ? (pattern.dir === tendM5) : false);
 
-                    if (emaOk && macroOk) {
-                        let valorEntrada = fin.bancaAtual * fin.percentual;
-                        m.op = { ativa: true, est: pattern.name, pre: m.preco, t: 60, dir: pattern.dir, g: 0, val: valorEntrada };
-                        fin.bancaAtual -= valorEntrada;
-                        enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n📊 Ativo: ${m.nome}\n📈 Direção: ${pattern.dir}\n🎯 Estratégia: ${pattern.name}`);
-                    }
+                if (pattern && emaOk && m5Ok) {
+                    let valorEntrada = fin.bancaAtual * fin.percentual;
+                    if(valorEntrada <= 0) valorEntrada = 2.00; 
+
+                    fin.bancaAtual -= valorEntrada;
+                    m.op = { ativa: true, est: pattern.name, pre: parseFloat(ohlc.close), t: 60, dir: pattern.dir, g: 0, val: valorEntrada };
+                    const h = obterHorarios();
+                    enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n\n👉Clique agora \n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Entrada: R$ ${valorEntrada.toFixed(2)}\n💰 Banca atual: R$ ${fin.bancaAtual.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
                 }
             }
         }
-        
-        // Lógica de resultado omitida para brevidade (mantém a que você enviou)
-    });
 
+        if (m.op.ativa) {
+            m.op.t--;
+            if (m.op.t <= 0) {
+                let ganhou = (m.op.dir === "CALL" && parseFloat(m.preco) > m.op.pre) || (m.op.dir === "PUT" && parseFloat(m.preco) < m.op.pre);
+                const placarStr = `G: ${stats.winDireto + stats.winG1 + stats.winG2} : R: ${stats.loss}`;
+
+                if (ganhou) {
+                    if(m.op.g===0) stats.winDireto++; else if(m.op.g===1) stats.winG1++; else stats.winG2++;
+                    fin.bancaAtual += m.op.val + (m.op.val * fin.payout);
+                    enviarTelegram(`✅ *STATUS: GREEN*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Banca Atual: R$ ${fin.bancaAtual.toFixed(2)}\n🔥 PLACAR: ${placarStr}`);
+                    m.op.ativa = false;
+                } else if (m.op.g < 2) {
+                    // --- GALE INTELIGENTE ULTIMATE ---
+                    const emaAtual = getEMA(m.history, emaConfig);
+                    const rompeuEmaContra = (m.op.dir === "CALL" && parseFloat(m.preco) < emaAtual) || (m.op.dir === "PUT" && parseFloat(m.preco) > emaAtual);
+
+                    if (emaConfig > 0 && rompeuEmaContra) {
+                        stats.loss++;
+                        enviarTelegram(`🛡️ *GALE ABORTADO*\n⚠️ Tendência rompeu a EMA contra você. Preservando banca no ${m.nome}.`);
+                        m.op.ativa = false;
+                    } else {
+                        m.op.g++; 
+                        let novoValorGale = m.op.val * 2;
+                        fin.bancaAtual -= novoValorGale;
+                        m.op.val = novoValorGale;
+                        m.op.t = 60; m.op.pre = parseFloat(m.preco);
+                        const h = obterHorarios();
+                        enviarTelegram(`⚠️ *GALE ${m.op.g}*\n\n👉Clique agora\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Entrada: R$ ${m.op.val.toFixed(2)}\n💰 Banca atual: R$ ${fin.bancaAtual.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
+                    }
+                } else {
+                    stats.loss++; 
+                    enviarTelegram(`❌ *STATUS: RED*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Banca Atual: R$ ${fin.bancaAtual.toFixed(2)}\n🔥 PLACAR: ${placarStr}`);
+                    m.op.ativa = false;
+                }
+            }
+        }
+    });
     motores[cardId] = m;
 }
 
-// --- ROTAS PARA CONTROLE (Use o Postman ou seu HTML para chamar) ---
-
-// 1. Iniciar um ativo (Ex: Volatility 100)
-app.post('/mudar', (req, res) => {
-    const { cardId, ativoId, nomeAtivo } = req.body;
-    iniciarMotor(cardId, ativoId, nomeAtivo);
-    res.json({ msg: `Monitorando ${nomeAtivo}` });
+app.post('/mudar', (req, res) => { 
+    iniciarMotor(req.body.cardId, req.body.ativoId, req.body.nomeAtivo); 
+    res.json({ success: true }); 
 });
 
-// 2. Mudar EMA e TF
-app.post('/config', (req, res) => {
-    if(req.body.ema) emaConfig = req.body.ema;
-    if(req.body.tf) tfConfig = req.body.tf;
-    res.json({ ema_atual: emaConfig, tf_macro_atual: tfConfig });
-});
-
-function enviarTelegram(msg) {
-    fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: TG_CHAT_ID, text: msg, parse_mode: "Markdown" })
-    }).catch(e => console.log("Erro Telegram"));
-}
-
-app.listen(PORT, () => console.log(`ROBÔ ATIVO NA PORTA ${PORT}`));
+app.listen(PORT, () => console.log(`BRAIN PRO RODANDO NA PORTA ${PORT}`));
