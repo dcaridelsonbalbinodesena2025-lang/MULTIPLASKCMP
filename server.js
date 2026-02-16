@@ -19,8 +19,8 @@ let stats = { winDireto: 0, winG1: 0, winG2: 0, loss: 0, totalAnalises: 0 };
 let motores = {};
 
 // --- CONTROLES DE FILTROS DINÂMICOS ---
-const OPCOES_EMA = [10, 20, 50, 100, 200, 0]; // 0 = OFF
-const OPCOES_TF = [300, 900, 1800, 3600, 0];  // Segundos (300=M5, 0=OFF)
+const OPCOES_EMA = [10, 20, 50, 100, 200, 0]; 
+const OPCOES_TF = [300, 900, 1800, 3600, 0];  
 let emaConfig = 20; 
 let tfConfig = 300; 
 
@@ -46,13 +46,11 @@ app.post('/config-financeira', (req, res) => {
     if (banca !== undefined) {
         fin.bancaInicial = Number(banca);
         fin.bancaAtual = Number(banca); 
-        console.log(`>>> SALVANDO: Banca R$ ${fin.bancaInicial}`);
     }
     if (payout !== undefined) fin.payout = Number(payout) / 100;
     res.json({ success: true, fin });
 });
 
-// NOVAS ROTAS PARA OS BOTÕES
 app.post('/alternar-ema', (req, res) => {
     let idx = OPCOES_EMA.indexOf(emaConfig);
     emaConfig = OPCOES_EMA[(idx + 1) % OPCOES_EMA.length];
@@ -69,33 +67,34 @@ app.get('/status', (req, res) => {
     const lucroReal = fin.bancaInicial > 0 ? (fin.bancaAtual - fin.bancaInicial) : 0;
     const totalWins = stats.winDireto + stats.winG1 + stats.winG2;
     const totalOps = totalWins + stats.loss;
-    
     res.json({
         global: { 
             winDireto: stats.winDireto, winGales: (stats.winG1 + stats.winG2), loss: stats.loss, 
             banca: fin.bancaAtual.toFixed(2), lucro: lucroReal.toFixed(2), 
             precisao: (totalOps > 0 ? (totalWins / totalOps * 100) : 0).toFixed(1),
-            ema: emaConfig,
-            tf: tfConfig
+            ema: emaConfig, tf: tfConfig
         },
         ativos: Object.keys(motores).map(id => ({
             cardId: id, nome: motores[id].nome, preco: motores[id].preco, 
-            status: motores[id].op.ativa ? "OPERANDO" : "ANALISANDO",
-            forca: motores[id].forca || 50
+            status: motores[id].op.ativa ? "OPERANDO" : "ANALISANDO"
         }))
     });
 });
 
 function enviarTelegram(msg) {
-    let payload = { chat_id: TG_CHAT_ID, text: msg, parse_mode: "Markdown", 
-    reply_markup: { inline_keyboard: [[{ text: "📲 PREPARAR NA CORRETORA", url: LINK_CORRETORA }]] }};
+    let payload = { 
+        chat_id: TG_CHAT_ID, 
+        text: msg, 
+        parse_mode: "Markdown", 
+        reply_markup: { inline_keyboard: [[{ text: "📲 PREPARAR NA CORRETORA", url: LINK_CORRETORA }]] }
+    };
     fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     }).catch(e => {});
 }
 
-// --- LÓGICA OPERACIONAL ULTIMATE (CÉREBRO) ---
+// --- LÓGICA DE ANÁLISE VIP (EXTRAÍDA DO CÓDIGO 1) ---
 function analyzeCandlePatterns(list) {
     if(list.length < 20) return null;
     const last = list[list.length - 1];
@@ -104,11 +103,11 @@ function analyzeCandlePatterns(list) {
     const upperWick = last.high - Math.max(last.open, last.close);
     const lowerWick = Math.min(last.open, last.close) - last.low;
 
-    // FILTRO DE VOLUME ULTIMATE (Média das últimas 10 velas)
+    // Filtro de Volume (Média de 10 velas)
     const volAvg = list.slice(-10).reduce((acc, c) => acc + (c.high - c.low), 0) / 10;
     if ((last.high - last.low) < (volAvg * 0.7)) return null; 
 
-    // MAPEAMENTO S/R
+    // Suporte e Resistência (50 velas)
     const recent = list.slice(-50);
     const supports = recent.map(c => c.low).sort((a,b) => a-b).slice(0, 3);
     const resistances = recent.map(c => c.high).sort((a,b) => b-a).slice(0, 3);
@@ -117,7 +116,7 @@ function analyzeCandlePatterns(list) {
     const noSuporte = supports.some(s => Math.abs(last.low - s) <= margem);
     const naResistencia = resistances.some(r => Math.abs(last.high - r) <= margem);
 
-    // GATILHOS VIP
+    // Gatilhos VIP
     if (lowerWick > body * 2 && noSuporte) return { name: "MARTELO VIP", dir: "CALL" };
     if (upperWick > body * 2 && naResistencia) return { name: "ESTRELA VIP", dir: "PUT" };
     if (last.close > last.open && prev.open > prev.close && last.close > prev.open && noSuporte) return { name: "🔥 ENGOLFO VIP", dir: "CALL" };
@@ -162,6 +161,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
             const uM5 = m.historyM5[m.historyM5.length - 1];
             const tendM5 = uM5 ? (uM5.close >= uM5.open ? "CALL" : "PUT") : null;
 
+            // ALERTA
             if (s >= 50 && s <= 55 && !m.op.ativa && !m.alertado) {
                 const pattern = analyzeCandlePatterns([...m.history, { open: ohlc.open, close: ohlc.close, high: ohlc.high, low: ohlc.low }]);
                 const emaOk = emaConfig === 0 ? true : (pattern ? (pattern.dir === "CALL" ? ohlc.close > emaValue : ohlc.close < emaValue) : false);
@@ -174,6 +174,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                 }
             }
 
+            // ENTRADA
             if (s === 0 && !m.op.ativa) {
                 m.alertado = false;
                 const pattern = analyzeCandlePatterns(m.history);
@@ -187,7 +188,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                     fin.bancaAtual -= valorEntrada;
                     m.op = { ativa: true, est: pattern.name, pre: parseFloat(ohlc.close), t: 60, dir: pattern.dir, g: 0, val: valorEntrada };
                     const h = obterHorarios();
-                    enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n\n👉Clique agora \n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Entrada: R$ ${valorEntrada.toFixed(2)}\n💰 Banca atual: R$ ${fin.bancaAtual.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
+                    enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n\n👉Clique agora!\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Entrada: R$ ${valorEntrada.toFixed(2)}\n💰 Banca atual: R$ ${fin.bancaAtual.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
                 }
             }
         }
@@ -204,13 +205,13 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                     enviarTelegram(`✅ *STATUS: GREEN*\n\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Banca Atual: R$ ${fin.bancaAtual.toFixed(2)}\n🔥 PLACAR: ${placarStr}`);
                     m.op.ativa = false;
                 } else if (m.op.g < 2) {
-                    // --- GALE INTELIGENTE ULTIMATE ---
+                    // LÓGICA DE GALE ABORTADO (Média Contra)
                     const emaAtual = getEMA(m.history, emaConfig);
-                    const rompeuEmaContra = (m.op.dir === "CALL" && parseFloat(m.preco) < emaAtual) || (m.op.dir === "PUT" && parseFloat(m.preco) > emaAtual);
+                    const rompeuContra = (m.op.dir === "CALL" && parseFloat(m.preco) < emaAtual) || (m.op.dir === "PUT" && parseFloat(m.preco) > emaAtual);
 
-                    if (emaConfig > 0 && rompeuEmaContra) {
+                    if (emaConfig > 0 && rompeuContra && m.op.g === 1) {
                         stats.loss++;
-                        enviarTelegram(`🛡️ *GALE ABORTADO*\n⚠️ Tendência rompeu a EMA contra você. Preservando banca no ${m.nome}.`);
+                        enviarTelegram(`🛡️ *GALE ABORTADO*\n⚠️ Tendência rompeu a EMA contra. Preservando banca.`);
                         m.op.ativa = false;
                     } else {
                         m.op.g++; 
@@ -219,7 +220,7 @@ function iniciarMotor(cardId, ativoId, nomeAtivo) {
                         m.op.val = novoValorGale;
                         m.op.t = 60; m.op.pre = parseFloat(m.preco);
                         const h = obterHorarios();
-                        enviarTelegram(`⚠️ *GALE ${m.op.g}*\n\n👉Clique agora\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Entrada: R$ ${m.op.val.toFixed(2)}\n💰 Banca atual: R$ ${fin.bancaAtual.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
+                        enviarTelegram(`⚠️ *GALE ${m.op.g}*\n\n👉Clique agora!\n📊 Ativo: ${m.nome}\n🎯 Padrão: ${m.op.est}\n📈 Direção: ${m.op.dir}\n💰 Entrada: R$ ${m.op.val.toFixed(2)}\n💰 Banca atual: R$ ${fin.bancaAtual.toFixed(2)}\n⏰ Inicio: ${h.inicio}\n🏁 Fim: ${h.fim}`);
                     }
                 } else {
                     stats.loss++; 
