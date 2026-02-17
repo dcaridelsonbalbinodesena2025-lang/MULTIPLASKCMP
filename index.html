@@ -3,244 +3,211 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KCM - Multi Estratégia</title>
+    <title>KCM BRAIN PRO - LISTA ATUALIZADA</title>
     <style>
-        :root { 
-            --neon-blue: #1e90ff; --neon-green: #00ff88; --neon-red: #ff3355; 
-            --gale: #f0b90b; --bg-dark: #05070a; --royal-blue: #0047AB;
-        }
-        body { background: var(--bg-dark); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
-        .logo { font-size: 22px; font-weight: 900; color: #fff; margin: 10px 0; }
-        .logo span { color: var(--neon-blue); font-style: italic; }
-        
-        .srv-status { font-size: 9px; padding: 4px 12px; border-radius: 20px; background: #000; border: 1px solid var(--neon-green); color: var(--neon-green); margin-bottom: 15px; text-transform: uppercase; }
-
-        /* PAINEL FINANCEIRO */
-        .painel-financeiro { background: #111418; border: 2px solid var(--neon-green); border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; margin-bottom: 15px; }
-        .fin-row { display: flex; gap: 10px; justify-content: space-between; margin-bottom: 15px; }
-        .fin-input-group { flex: 1; }
-        .fin-input-group label { font-size: 9px; color: #888; display: block; margin-bottom: 4px; }
-        .fin-input { width: 90%; background: #000; border: 1px solid #333; color: #fff; padding: 8px; border-radius: 5px; font-weight: bold; }
-        
-        .display-stats { display: flex; justify-content: space-around; text-align: center; margin-top: 10px; }
-        .display-stats div { flex: 1; }
-        .display-stats span { font-size: 8px; color: #888; display: block; }
-        .display-stats b { font-size: 14px; }
-
-        /* PAINEL ESTRATÉGIAS */
-        .painel-central { background: #111418; border-radius: 15px; width: 95%; max-width: 600px; padding: 15px; border: 1px solid #222; }
-        .grid-estrat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
-        .estrat-card { background: #000; padding: 10px; border-radius: 10px; border: 1px solid #222; text-align: center; }
-        .estrat-name { font-size: 9px; color: #888; margin-bottom: 5px; }
-        .btn-toggle { background: var(--neon-green); color: #000; padding: 6px; font-size: 10px; font-weight: bold; border-radius: 5px; border: none; width: 100%; cursor: pointer; }
-        .btn-off { background: var(--neon-red); color: #fff; }
-        .estrat-results { font-size: 9px; margin-top: 5px; display: flex; justify-content: space-around; }
-
-        .btn-salvar-grande { background: var(--neon-green); color: #000; border: none; padding: 12px; border-radius: 8px; font-weight: 900; cursor: pointer; width: 100%; margin: 15px 0; font-size: 12px; }
-
-        /* BARRA AZUL */
-        .barra-global { background: #05070a; border: 1px solid var(--royal-blue); border-radius: 10px; width: 100%; padding: 10px 0; display: flex; justify-content: space-around; margin-bottom: 20px; }
-        .stat-item { text-align: center; }
-        .stat-item span { font-size: 8px; color: #888; }
-        .stat-item b { display: block; font-size: 14px; }
-
-        /* MONITORES */
-        .grid-monitores { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 600px; }
-        .card { background: #080a0d; border-radius: 15px; padding: 12px; border: 1px solid #1e2228; text-align: center; }
-        .thermometer-wrap { width: 100%; height: 6px; background: #222; border-radius: 3px; margin: 10px 0; overflow: hidden; }
-        .thermometer-fill { height: 100%; width: 50%; background: linear-gradient(90deg, #ff3355, #f0b90b, #00ff88); transition: 0.5s; }
-        .status-box { background: #000; padding: 6px; border-radius: 5px; margin-bottom: 8px; font-size: 9px; color: var(--neon-blue); font-weight: bold; border: 1px solid #222; }
-        .price { color: var(--gale); font-family: monospace; font-size: 11px; margin-bottom: 8px; }
-        .select-ativo { background: #000; color: #fff; border: 1px solid #444; font-size: 10px; width: 100%; padding: 5px; border-radius: 4px; }
+        :root { --n-blue: #1e90ff; --n-green: #00ff88; --n-red: #ff3355; --bg: #05070a; }
+        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+        .logo { font-size: 22px; font-weight: 900; margin: 10px 0; }
+        .logo span { color: var(--n-blue); }
+        .painel-fin { background: #111418; border: 2px solid var(--n-green); border-radius: 15px; width: 95%; max-width: 500px; padding: 15px; margin-bottom: 10px; }
+        .fin-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .fin-group { flex: 1; }
+        .fin-group label { font-size: 9px; color: #888; display: block; }
+        .fin-input { width: 85%; background: #000; border: 1px solid #333; color: #fff; padding: 6px; border-radius: 5px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; text-align: center; border-top: 1px solid #222; padding-top: 10px; }
+        .stat-l { font-size: 8px; color: #888; text-transform: uppercase; }
+        .stat-v { font-size: 13px; font-weight: bold; display: block; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 500px; }
+        .card { background: #111418; border-radius: 15px; padding: 10px; border: 1px solid #222; text-align: center; }
+        .status-box { background: #000; padding: 8px; border-radius: 8px; margin: 8px 0; border: 1px solid #333; min-height: 45px; }
+        .status-txt { font-size: 9px; color: var(--n-blue); font-weight: bold; display: block; }
+        .price-txt { font-size: 11px; color: #f0b90b; font-family: monospace; margin-top: 4px; }
+        .sel { background: #000; color: #fff; border: 1px solid #444; font-size: 10px; width: 100%; padding: 5px; border-radius: 5px; }
     </style>
 </head>
 <body>
 
-    <div class="logo">K.C<span>📈</span>M MULTI/ESTRATEGIA-CONTROL</div>
-    <div id="conexao" class="srv-status">BOT INTEGRADO - SISTEMA ATIVO</div>
+    <div class="logo">K.C<span>📈</span>M BRAIN PRO</div>
 
-    <div class="painel-financeiro">
+    <div class="painel-fin">
         <div class="fin-row">
-            <div class="fin-input-group">
-                <label>BANCA INICIAL (R$)</label>
+            <div class="fin-group">
+                <label>BANCA (R$)</label>
                 <input type="number" id="inpBanca" class="fin-input" value="5000">
             </div>
-            <div class="fin-input-group">
-                <label>PAYOUT (%)</label>
-                <input type="number" id="inpPayout" class="fin-input" value="95">
+            <div class="fin-group">
+                <label>SIMULADOR (%)</label>
+                <input type="number" id="inpSim" class="fin-input" value="1">
             </div>
         </div>
-        <div class="display-stats">
-            <div><span>BANCA ATUAL</span><b id="display-banca">R$ 5000.00</b></div>
-            <div><span>LUCRO HOJE</span><b id="display-lucro" style="color:var(--neon-green)">R$ 0.00</b></div>
-            <div><span>CRESCIMENTO</span><b id="display-crescimento" style="color:var(--neon-blue)">0%</b></div>
-            <div><span>SIMULADOR</span><b style="color:var(--gale)">1%</b></div>
-        </div>
-    </div>
-
-    <div class="painel-central">
-        <div class="grid-estrat">
-            <div class="estrat-card">
-                <div class="estrat-name">REGRA 1</div>
-                <button id="btn-REGRA 1" class="btn-toggle" onclick="toggleEstrat('REGRA 1')">ATIVO</button>
-            </div>
-            <div class="estrat-card">
-                <div class="estrat-name">FLUXO SNIPER</div>
-                <button id="btn-FLUXO SNIPER" class="btn-toggle" onclick="toggleEstrat('FLUXO SNIPER')">ATIVO</button>
-            </div>
-            <div class="estrat-card">
-                <div class="estrat-name">ZIGZAG FRACTAL</div>
-                <button id="btn-ZIGZAG FRACTAL" class="btn-toggle" onclick="toggleEstrat('ZIGZAG FRACTAL')">ATIVO</button>
-            </div>
-            <div class="estrat-card">
-                <div class="estrat-name">SNIPER (RETRAÇÃO)</div>
-                <button id="btn-SNIPER (RETRAÇÃO)" class="btn-toggle" onclick="toggleEstrat('SNIPER (RETRAÇÃO)')">ATIVO</button>
-            </div>
-        </div>
-
-        <button class="btn-salvar-grande" onclick="salvarTudo()">SALVAR BANCA/PAYOUT</button>
-
-        <div class="barra-global">
-            <div class="stat-item"><span>WINS DIRETO</span><b id="g-direto" style="color:var(--neon-green)">0</b></div>
-            <div class="stat-item"><span>WINS GALES</span><b id="g-gales" style="color:var(--gale)">0</b></div>
-            <div class="stat-item"><span>LOSS TOTAL</span><b id="g-loss" style="color:var(--neon-red)">0</b></div>
-            <div class="stat-item"><span>PRECISÃO</span><b id="g-precisao">0%</b></div>
+        <div class="stats-grid">
+            <div><span class="stat-l">Banca Atual</span><span class="stat-v" id="v-banca">R$ 5000.00</span></div>
+            <div><span class="stat-l">G</span><span class="stat-v" style="color:var(--n-green)" id="v-g">0</span></div>
+            <div><span class="stat-l">R</span><span class="stat-v" style="color:var(--n-red)" id="v-r">0</span></div>
+            <div><span class="stat-l">Próxima</span><span class="stat-v" id="v-ent">R$ 50.00</span></div>
         </div>
     </div>
 
-    <div class="grid-monitores" id="grid"></div>
+    <div class="grid" id="main-grid"></div>
 
 <script>
-    const URL_SERVIDOR = "https://multiplaskcmp.onrender.com";
+    const TOK = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI";
+    const CID = "-1003355965894";
     
-    // --- SUA LISTA DE ATIVOS INTEGRADA ---
-    const LISTA_ATIVOS = [
-            { id: "NONE", nome: "❌ DESATIVAR SLOT" },
-    { id: "R_10", nome: "📊 Volatility 10" },
-    { id: "R_25", nome: "📊 Volatility 25" },
-    { id: "R_50", nome: "📊 Volatility 50" },
-    { id: "R_75", nome: "📊 Volatility 75" },
-    { id: "R_100", nome: "📊 Volatility 100" },
-    { id: "1HZ10V", nome: "📈 Volatility 10 (1s)" },
-    { id: "1HZ25V", nome: "📈 Volatility 25 (1s)" },
-    { id: "1HZ50V", nome: "📈 Volatility 50 (1s)" },
-    { id: "1HZ75V", nome: "📈 Volatility 75 (1s)" },
-    { id: "1HZ100V", nome: "📈 Volatility 100 (1s)" },
-    { id: "BOOM300", nome: "💥 Boom 300" },
-    { id: "BOOM500", nome: "💥 Boom 500" },
-    { id: "BOOM1000", nome: "💥 Boom 1000" },
-    { id: "CRASH300", nome: "📉 Crash 300" },
-    { id: "CRASH500", nome: "📉 Crash 500" },
-    { id: "CRASH1000", nome: "📉 Crash 1000" },
-    { id: "ST50", nome: "🎢 Step Index" },
-    { id: "frxAUDUSD", nome: "💱 AUD/USD" },
-    { id: "frxEURUSD", nome: "💱 EUR/USD" },
-    { id: "frxGBPUSD", nome: "💱 GBP/USD" },
-    { id: "frxNZDUSD", nome: "💱 NZD/USD" },
-    { id: "frxUSDCAD", nome: "💱 USD/CAD" },
-    { id: "frxUSDCHF", nome: "💱 USD/CHF" },
-    { id: "frxUSDJPY", nome: "💱 USD/JPY" },
-    { id: "frxAUDCAD", nome: "💱 AUD/CAD" },
-    { id: "frxAUDCHF", nome: "💱 AUD/CHF" },
-    { id: "frxAUDJPY", nome: "💱 AUD/JPY" },
-    { id: "frxAUDNZD", nome: "💱 AUD/NZD" },
-    { id: "frxEURAUD", nome: "💱 EUR/AUD" },
-    { id: "frxEURCAD", nome: "💱 EUR/CAD" },
-    { id: "frxEURCHF", nome: "💱 EUR/CHF" },
-    { id: "frxEURGBP", nome: "💱 EUR/GBP" },
-    { id: "frxEURJPY", nome: "💱 EUR/JPY" },
-    { id: "frxEURNZD", nome: "💱 EUR/NZD" },
-    { id: "frxGBPAUD", nome: "💱 GBP/AUD" },
-    { id: "frxGBPCAD", nome: "💱 GBP/CAD" },
-    { id: "frxGBPCHF", nome: "💱 GBP/CHF" },
-    { id: "frxGBPJPY", nome: "💱 GBP/JPY" },
-    { id: "frxGBPNZD", nome: "💱 GBP/NZD" },
-    { id: "frxNZDJPY", nome: "💱 NZD/JPY" },
-    { id: "frxUSDMXN", nome: "💱 USD/MXN" },    
-{ id: "frxSGDJPY", nome: "💱 SGD/JPY" },
-    { id: "frxEURNOK", nome: "💱 EUR/NOK" },
-    { id: "frxEURPLN", nome: "💱 EUR/PLN" },
-    { id: "frxEURSEK", nome: "💱 EUR/SEK" },
-    { id: "frxUSDSGD", nome: "💱 USD/SGD" },
-    { id: "frxXAUUSD", nome: "🪙 OURO (XAU/USD)" },
-    { id: "cryBTCUSD", nome: "₿ BITCOIN (BTC/USD)" },
-    { id: "cryETHUSD", nome: "♢ ETHEREUM (ETH/USD)" }
+    // NOVA LISTA DE ATIVOS
+    const LISTA_COMPLETA = [
+        { id: "NONE", nome: "❌ DESATIVAR SLOT" },
+        { id: "R_10", nome: "📊 Volatility 10" },
+        { id: "R_25", nome: "📊 Volatility 25" },
+        { id: "R_50", nome: "📊 Volatility 50" },
+        { id: "R_75", nome: "📊 Volatility 75" },
+        { id: "R_100", nome: "📊 Volatility 100" },
+        { id: "1HZ10V", nome: "📈 Volatility 10 (1s)" },
+        { id: "1HZ25V", nome: "📈 Volatility 25 (1s)" },
+        { id: "1HZ50V", nome: "📈 Volatility 50 (1s)" },
+        { id: "1HZ75V", nome: "📈 Volatility 75 (1s)" },
+        { id: "1HZ100V", nome: "📈 Volatility 100 (1s)" },
+        { id: "BOOM300", nome: "💥 Boom 300" },
+        { id: "BOOM500", nome: "💥 Boom 500" },
+        { id: "BOOM1000", nome: "💥 Boom 1000" },
+        { id: "CRASH300", nome: "📉 Crash 300" },
+        { id: "CRASH500", nome: "📉 Crash 500" },
+        { id: "CRASH1000", nome: "📉 Crash 1000" },
+        { id: "ST50", nome: "🎢 Step Index" },
+        { id: "frxAUDUSD", nome: "💱 AUD/USD" },
+        { id: "frxEURUSD", nome: "💱 EUR/USD" },
+        { id: "frxGBPUSD", nome: "💱 GBP/USD" },
+        { id: "frxNZDUSD", nome: "💱 NZD/USD" },
+        { id: "frxUSDCAD", nome: "💱 USD/CAD" },
+        { id: "frxUSDCHF", nome: "💱 USD/CHF" },
+        { id: "frxUSDJPY", nome: "💱 USD/JPY" },
+        { id: "frxAUDCAD", nome: "💱 AUD/CAD" },
+        { id: "frxAUDCHF", nome: "💱 AUD/CHF" },
+        { id: "frxAUDJPY", nome: "💱 AUD/JPY" },
+        { id: "frxAUDNZD", nome: "💱 AUD/NZD" },
+        { id: "frxEURAUD", nome: "💱 EUR/AUD" },
+        { id: "frxEURCAD", nome: "💱 EUR/CAD" },
+        { id: "frxEURCHF", nome: "💱 EUR/CHF" },
+        { id: "frxEURGBP", nome: "💱 EUR/GBP" },
+        { id: "frxEURJPY", nome: "💱 EUR/JPY" },
+        { id: "frxEURNZD", nome: "💱 EUR/NZD" },
+        { id: "frxGBPAUD", nome: "💱 GBP/AUD" },
+        { id: "frxGBPCAD", nome: "💱 GBP/CAD" },
+        { id: "frxGBPCHF", nome: "💱 GBP/CHF" },
+        { id: "frxGBPJPY", nome: "💱 GBP/JPY" },
+        { id: "frxGBPNZD", nome: "💱 GBP/NZD" },
+        { id: "frxNZDJPY", nome: "💱 NZD/JPY" },
+        { id: "frxUSDMXN", nome: "💱 USD/MXN" },    
+        { id: "frxSGDJPY", nome: "💱 SGD/JPY" },
+        { id: "frxEURNOK", nome: "💱 EUR/NOK" },
+        { id: "frxEURPLN", nome: "💱 EUR/PLN" },
+        { id: "frxEURSEK", nome: "💱 EUR/SEK" },
+        { id: "frxUSDSGD", nome: "💱 USD/SGD" },
+        { id: "frxXAUUSD", nome: "🪙 OURO (XAU/USD)" },
+        { id: "cryBTCUSD", nome: "₿ BITCOIN (BTC/USD)" },
+        { id: "cryETHUSD", nome: "♢ ETHEREUM (ETH/USD)" }
+    ];
 
-    let localEstatutos = { "REGRA 1": true, "FLUXO SNIPER": true, "ZIGZAG FRACTAL": true, "SNIPER (RETRAÇÃO)": true };
+    let banca = 5000, g = 0, r = 0, motores = {};
 
-    function criarMonitores() {
-        const grid = document.getElementById('grid');
-        let optionsHTML = LISTA_ATIVOS.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
+    function sendTG(m, btn = false) {
+        let u = `https://api.telegram.org/bot${TOK}/sendMessage?chat_id=${CID}&text=${encodeURIComponent(m)}&parse_mode=Markdown`;
+        if(btn) {
+            let kb = { inline_keyboard: [[{ text: "👉 Clique agora!", url: "https://track.deriv.com/_S_W1N_" }]] };
+            u += `&reply_markup=${encodeURIComponent(JSON.stringify(kb))}`;
+        }
+        fetch(u).catch(() => {});
+    }
+
+    function calcEMA(data, p) {
+        if(!data || data.length < p) return 0;
+        let k = 2/(p+1), ema = data[0].close;
+        for(let i=1; i<data.length; i++) ema = (data[i].close * k) + (ema * (1-k));
+        return ema;
+    }
+
+    function init(id, asset, name) {
+        if(motores[id]?.ws) motores[id].ws.close();
+        if(asset === "NONE") {
+            document.getElementById(`st-${id}`).innerText = "OFF";
+            document.getElementById(`pr-${id}`).innerText = "---";
+            return;
+        }
+
+        let m = { name, ws: new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089'), v1: [], v5: [], ema: 0, p: "---" };
+
+        m.ws.onopen = () => {
+            m.ws.send(JSON.stringify({ ticks: asset }));
+            m.ws.send(JSON.stringify({ ticks_history: asset, end: "latest", count: 30, granularity: 60, subscribe: 1 }));
+            m.ws.send(JSON.stringify({ ticks_history: asset, end: "latest", count: 5, granularity: 300, subscribe: 1 }));
+        };
+
+        m.ws.onmessage = (e) => {
+            let res = JSON.parse(e.data);
+            if(res.tick) {
+                m.p = res.tick.quote.toFixed(5);
+                document.getElementById(`pr-${id}`).innerText = m.p;
+            }
+            if(res.candles) {
+                if(res.echo_req.granularity === 60) m.v1 = res.candles;
+                if(res.echo_req.granularity === 300) m.v5 = res.candles;
+            }
+            if(res.ohlc) {
+                let o = res.ohlc;
+                if(o.granularity === 60) {
+                    m.v1[m.v1.length-1] = { open: o.open, close: o.close, high: o.high, low: o.low };
+                    if(m.v1.length >= 20) m.ema = calcEMA(m.v1, 20);
+                    if(parseInt(o.epoch) % 60 === 45) runLogic(id, true);
+                    if(parseInt(o.epoch) % 60 === 0) runLogic(id, false);
+                }
+            }
+            document.getElementById(`st-${id}`).innerText = m.ema > 0 ? `SISTEMA ATIVO` : `SINCRO...`;
+        };
+        motores[id] = m;
+    }
+
+    function runLogic(id, isPre) {
+        let m = motores[id];
+        if(!m || m.v1.length < 2 || m.v5.length < 1 || m.ema === 0) return;
         
-        for (let i = 1; i <= 6; i++) {
-            grid.innerHTML += `
-                <div class="card" id="div-card${i}">
-                    <div style="font-size:8px; color:#888;">MONITOR ${i}</div>
-                    <div class="thermometer-wrap"><div class="thermometer-fill" id="therm-card${i}"></div></div>
-                    <div class="status-box" id="status-card${i}">MONITORANDO</div>
-                    <div class="price" id="price-card${i}">0.00000</div>
-                    <select class="select-ativo" id="select-card${i}" onchange="mudarAtivo('card${i}')">
-                        ${optionsHTML}
-                    </select>
-                </div>`;
+        let c = m.v1[m.v1.length-1], a = m.v1[m.v1.length-2], t5 = m.v5[m.v5.length-1];
+        let pad = "", dir = "";
+
+        if(c.close > a.open && c.close > a.close) { pad = "ENGOLFO ALTA"; dir = "CALL"; }
+        else if(c.close < a.open && c.close < a.close) { pad = "ENGOLFO BAIXA"; dir = "PUT"; }
+
+        if(pad !== "") {
+            let okM5 = (dir === "CALL" ? t5.close > t5.open : t5.close < t5.open);
+            let okEMA = (dir === "CALL" ? m.ema < c.low : m.ema > c.high);
+
+            if(okM5 && okEMA) {
+                let val = (banca * (document.getElementById('inpSim').value/100)).toFixed(2);
+                let t = new Date().toLocaleTimeString('pt-BR');
+                if(isPre) {
+                    sendTG(`⚠️ *ALERTA BRAIN PRO*\n\n📊 Ativo: 📊 ${m.name}\n🎯 Padrão: ${pad}\n📈 Filtro: PADRÃO PURO ✅\n🕓 Possível entrada: ${t}`);
+                } else {
+                    sendTG(`🚀 *ENTRADA CONFIRMADA*\n\n👉Clique agora!\n📊 Ativo: 📊 ${m.name}\n🎯 Padrão: ${pad}\n📈 Direção: ${dir}\n💰 Entrada: R$ ${val}\n💰Banca atual: R$ ${banca.toFixed(2)}\n⏰ Inicio: ${t}\n🏁 Fim: ${new Date(Date.now()+60000).toLocaleTimeString('pt-BR')}`, true);
+                }
+            }
         }
     }
 
-    async function salvarTudo() {
-        const banca = parseFloat(document.getElementById('inpBanca').value);
-        const payout = parseFloat(document.getElementById('inpPayout').value);
-        try {
-            await fetch(`${URL_SERVIDOR}/config-financeira`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ banca, payout, estatutos: localEstatutos })
-            });
-            alert("CONFIGURAÇÕES SALVAS!");
-        } catch (e) { alert("ERRO DE CONEXÃO"); }
+    function update() {
+        banca = parseFloat(document.getElementById('inpBanca').value);
+        document.getElementById('v-banca').innerText = "R$ " + banca.toFixed(2);
+        document.getElementById('v-ent').innerText = "R$ " + (banca * (document.getElementById('inpSim').value/100)).toFixed(2);
     }
 
-    async function mudarAtivo(cardId) {
-        const sel = document.getElementById(`select-${cardId}`);
-        await fetch(`${URL_SERVIDOR}/mudar`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ cardId, ativoId: sel.value, nomeAtivo: sel.options[sel.selectedIndex].text })
-        });
+    // GERA O HTML DO SELECT COM A NOVA LISTA
+    function gerarOptions() {
+        return LISTA_COMPLETA.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
     }
 
-    function toggleEstrat(nome) {
-        localEstatutos[nome] = !localEstatutos[nome];
-        const btn = document.getElementById(`btn-${nome}`);
-        btn.innerText = localEstatutos[nome] ? "ATIVO" : "DESATIVADO";
-        btn.classList.toggle('btn-off', !localEstatutos[nome]);
+    const gr = document.getElementById('main-grid');
+    for(let i=1; i<=4; i++) {
+        gr.innerHTML += `<div class="card"><div class="stat-l">MONITOR ${i}</div><div class="status-box"><span id="st-${i}" class="status-txt">OFF</span><span id="pr-${i}" class="price-txt">---</span></div><select class="sel" onchange="init('${i}', this.value, this.options[this.selectedIndex].text)">${gerarOptions()}</select></div>`;
     }
-
-    async function sincronizar() {
-        try {
-            const res = await fetch(`${URL_SERVIDOR}/status`);
-            const d = await res.json();
-            document.getElementById('display-banca').innerText = "R$ " + d.global.banca;
-            document.getElementById('display-lucro').innerText = "R$ " + d.global.lucro;
-            document.getElementById('g-direto').innerText = d.global.winDireto;
-            document.getElementById('g-gales').innerText = d.global.winGales;
-            document.getElementById('g-loss').innerText = d.global.loss;
-            document.getElementById('g-precisao').innerText = d.global.precisao + "%";
-            
-            d.ativos.forEach(a => {
-                if(document.getElementById(`price-${a.cardId}`)) {
-                    document.getElementById(`price-${a.cardId}`).innerText = a.preco;
-                    document.getElementById(`status-${a.cardId}`).innerText = a.status;
-                    document.getElementById(`therm-${a.cardId}`).style.width = a.forca + "%";
-                }
-            });
-        } catch (e) {}
-    }
-
-    criarMonitores();
-    setInterval(sincronizar, 1000);
+    setInterval(update, 1000);
 </script>
 </body>
 </html>
-
-
-
