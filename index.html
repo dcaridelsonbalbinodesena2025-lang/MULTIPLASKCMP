@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KCM BRAIN PRO - LISTA ATUALIZADA</title>
+    <title>KCM BRAIN PRO - GALE AUTOMÁTICO INDEPENDENTE</title>
     <style>
         :root { --n-blue: #1e90ff; --n-green: #00ff88; --n-red: #ff3355; --bg: #05070a; }
         body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
@@ -54,7 +54,6 @@
     const TOK = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI";
     const CID = "-1003355965894";
     
-    // NOVA LISTA DE ATIVOS
     const LISTA_COMPLETA = [
         { id: "NONE", nome: "❌ DESATIVAR SLOT" },
         { id: "R_10", nome: "📊 Volatility 10" },
@@ -134,7 +133,7 @@
             return;
         }
 
-        let m = { name, ws: new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089'), v1: [], v5: [], ema: 0, p: "---" };
+        let m = { name, ws: new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089'), v1: [], v5: [], ema: 0, p: "---", emOperacao: false };
 
         m.ws.onopen = () => {
             m.ws.send(JSON.stringify({ ticks: asset }));
@@ -157,11 +156,15 @@
                 if(o.granularity === 60) {
                     m.v1[m.v1.length-1] = { open: o.open, close: o.close, high: o.high, low: o.low };
                     if(m.v1.length >= 20) m.ema = calcEMA(m.v1, 20);
-                    if(parseInt(o.epoch) % 60 === 45) runLogic(id, true);
-                    if(parseInt(o.epoch) % 60 === 0) runLogic(id, false);
+                    
+                    // Só analisa novas oportunidades se não estiver em processo de Gale ativo neste ativo
+                    if(!m.emOperacao) {
+                        if(parseInt(o.epoch) % 60 === 45) runLogic(id, true);
+                        if(parseInt(o.epoch) % 60 === 0) runLogic(id, false);
+                    }
                 }
             }
-            document.getElementById(`st-${id}`).innerText = m.ema > 0 ? `SISTEMA ATIVO` : `SINCRO...`;
+            document.getElementById(`st-${id}`).innerText = m.emOperacao ? `⚠️ EM SINAL / GALE` : (m.ema > 0 ? `SISTEMA ATIVO` : `SINCRO...`);
         };
         motores[id] = m;
     }
@@ -181,15 +184,75 @@
             let okEMA = (dir === "CALL" ? m.ema < c.low : m.ema > c.high);
 
             if(okM5 && okEMA) {
-                let val = (banca * (document.getElementById('inpSim').value/100)).toFixed(2);
+                let pct = parseFloat(document.getElementById('inpSim').value / 100);
+                let valEntrada = banca * pct;
                 let t = new Date().toLocaleTimeString('pt-BR');
+                
                 if(isPre) {
-                    sendTG(`⚠️ *ALERTA BRAIN PRO*\n\n📊 Ativo: 📊 ${m.name}\n🎯 Padrão: ${pad}\n📈 Filtro: PADRÃO PURO ✅\n🕓 Possível entrada: ${t}`);
+                    sendTG(`⚠️ *ALERTA BRAIN PRO*\n\n📊 Ativo: ${m.name}\n🎯 Padrão: ${pad}\n📈 Filtro: PADRÃO PURO ✅\n🕓 Possível entrada: ${t}`);
                 } else {
-                    sendTG(`🚀 *ENTRADA CONFIRMADA*\n\n👉Clique agora!\n📊 Ativo: 📊 ${m.name}\n🎯 Padrão: ${pad}\n📈 Direção: ${dir}\n💰 Entrada: R$ ${val}\n💰Banca atual: R$ ${banca.toFixed(2)}\n⏰ Inicio: ${t}\n🏁 Fim: ${new Date(Date.now()+60000).toLocaleTimeString('pt-BR')}`, true);
+                    m.emOperacao = true; // Bloqueia novas entradas paralelas para este ativo específico
+                    
+                    // Dispara a Entrada Principal
+                    sendTG(`🚀 *ENTRADA CONFIRMADA*\n\n👉Clique agora!\n📊 Ativo: ${m.name}\n🎯 Padrão: ${pad}\n📈 Direção: ${dir}\n💰 Entrada: R$ ${valEntrada.toFixed(2)}\n⏰ Início: ${t}`, true);
+                    
+                    // Seta o gatilho para checar a vela após 61 segundos (tempo de expiração + margem de rede)
+                    setTimeout(() => verificarResultado(id, dir, valEntrada, 1), 61000);
                 }
             }
         }
+    }
+
+    function verificarResultado(id, dir, valorAnterior, estagioGale) {
+        let m = motores[id];
+        if(!m) return;
+
+        let velaResultado = m.v1[m.v1.length - 1];
+        // Checa se a vela fechou verde (CALL) ou vermelha (PUT)
+        let deuWin = (dir === "CALL" ? velaResultado.close > velaResultado.open : velaResultado.close < velaResultado.open);
+
+        if(deuWin) {
+            g++;
+            document.getElementById('v-g').innerText = g;
+            
+            let lucro = valorAnterior * 0.90; // Simulação fixa baseada em Payout padrão de 90%
+            banca += lucro;
+            document.getElementById('inpBanca').value = banca.toFixed(2);
+            
+            let textoWin = estagioGale === 1 ? "✅ WIN DE PRIMEIRA!" : `✅ WIN NO GALE ${estagioGale - 1}!`;
+            sendTG(`${textoWin}\n📊 Ativo: ${m.name}\n💰 Banca Atualizada: R$ ${banca.toFixed(2)}`);
+            
+            m.emOperacao = false; // Desbloqueia o monitor para o mercado novamente
+        } else {
+            banca -= valorAnterior; // Computa a perda do tiro anterior na banca
+            document.getElementById('inpBanca').value = banca.toFixed(2);
+
+            if(estagioGale === 1) {
+                // Executa Gale 1 (Multiplicador de 2x)
+                let valGale1 = valorAnterior * 2;
+                let t = new Date().toLocaleTimeString('pt-BR');
+                sendTG(`🔄 *ENTRADA DE GALE 1*\n\n📊 Ativo: ${m.name}\n📈 Direção: ${dir}\n💰 Valor: R$ ${valGale1.toFixed(2)}\n⏰ Início: ${t}`, true);
+                
+                setTimeout(() => verificarResultado(id, dir, valGale1, 2), 61000);
+            } 
+            else if(estagioGale === 2) {
+                // Executa Gale 2 (Multiplicador de 2x sobre o valor do Gale 1)
+                let valGale2 = valorAnterior * 2;
+                let t = new Date().toLocaleTimeString('pt-BR');
+                sendTG(`🔄 *ENTRADA DE GALE 2*\n\n📊 Ativo: ${m.name}\n📈 Direção: ${dir}\n💰 Valor: R$ ${valGale2.toFixed(2)}\n⏰ Início: ${t}`, true);
+                
+                setTimeout(() => verificarResultado(id, dir, valGale2, 3), 61000);
+            } 
+            else {
+                // Caso falhe também no Gale 2, decreta o RED definitivo
+                r++;
+                document.getElementById('v-r').innerText = r;
+                sendTG(`❌ *HIT / RED* ❌\n\n📊 Ativo: ${m.name}\n📉 Sequência encerrada.\n💰 Banca Atualizada: R$ ${banca.toFixed(2)}`);
+                
+                m.emOperacao = false; // Desbloqueia o monitor após o HIT
+            }
+        }
+        update();
     }
 
     function update() {
@@ -198,7 +261,6 @@
         document.getElementById('v-ent').innerText = "R$ " + (banca * (document.getElementById('inpSim').value/100)).toFixed(2);
     }
 
-    // GERA O HTML DO SELECT COM A NOVA LISTA
     function gerarOptions() {
         return LISTA_COMPLETA.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
     }
